@@ -313,7 +313,7 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 	if(cb_index[i] == NO_CB_MAPPED)
 		continue;
 	//printk("waiting for read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
-	//rdma_cq_event_handler(cb[i]->cq, cb[i]);
+	rdma_cq_event_handler(cb[i]->cq, cb[i]);
 	}
 
 
