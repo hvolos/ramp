@@ -42,6 +42,17 @@
 #include "infiniswap.h"
 #include <linux/bio.h>
 
+void print_buffer(char* tag, char* buf, int len) {
+	int i,j;
+	printk("%s buf: %p len: %lu\n", tag, buf, len);
+	for (i=0; i < len;) {
+		for (j=0; j < 32; i++, j++) {
+			printk("%02X", buf[i]);
+		} 
+		printk("\n");
+	}
+}
+
 unsigned char src_in_err[NDISKS], src_err_list[NDISKS];
 int nerrs, nsrcerrs=0;
 #ifdef EC
@@ -231,7 +242,7 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 	struct rdma_ctx *ctx[NDISKS];
 	int i,j;
 
-//        printk("read [%x] len [%x]", offset, len );
+        // printk("read [%x] len [%x]", offset, len );
 	
 	/*ctx synchronization*/	
 	atomic_t* count = kzalloc(sizeof(atomic_t), GFP_KERNEL);
@@ -312,8 +323,11 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 	for (i=0; i < NDATAS+j; i++) {
 	if(cb_index[i] == NO_CB_MAPPED)
 		continue;
-	//printk("waiting for read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
+	// printk("waiting for read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
 	rdma_cq_event_handler(cb[i]->cq, cb[i]);
+	// print_buffer("IS_rdma_read",
+	// 				ctx[i]->rdma_buf,
+	// 				ctx[i]->len);
 	}
 
 
@@ -1038,6 +1052,9 @@ static int client_read_done(struct kernel_cb * cb, struct ib_wc *wc)
 
 	struct rdma_ctx* ctxs[NDISKS];
 
+	for (i=0; i<NDISKS; i++){
+		ctxs[i] = ctx->ctxs[i];
+	}
 
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
@@ -1063,7 +1080,11 @@ static int client_read_done(struct kernel_cb * cb, struct ib_wc *wc)
         for (i=0; i<NDATAS; i++){
         memcpy( bio_data(bio)+ i*IS_PAGE_SIZE/NDATAS,
                 ctxs[i]->rdma_buf + bio_offset/NDATAS,
-                IS_PAGE_SIZE/NDATAS );
+                IS_PAGE_SIZE/NDATAS );								
+        // printk("client_read_done %lu\n", bio_offset);
+				// print_buffer("client_read_done",
+        //         ctxs[i]->rdma_buf + bio_offset/NDATAS,
+        //         IS_PAGE_SIZE/NDATAS );
         }
         }
         }
@@ -1073,10 +1094,6 @@ static int client_read_done(struct kernel_cb * cb, struct ib_wc *wc)
         #else
                 blk_mq_end_io(req, 0);
         #endif
-
-	for (i=0; i<NDISKS; i++){
-	ctxs[i] = ctx->ctxs[i];
-	}
 
 
 	for (i=0; i<NDISKS; i++){
@@ -2163,3 +2180,4 @@ static void __exit IS_cleanup_module(void)
 
 module_init(IS_init_module);
 module_exit(IS_cleanup_module);
+

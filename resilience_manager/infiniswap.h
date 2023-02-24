@@ -115,7 +115,7 @@
 #define REP 
 #define NDATAS 1
 #define NDISKS (NDATAS + 2) // + number of redendancy
-#define DATASIZE_G 4 //size of block device in GB
+#define DATASIZE_G 1 //size of block device in GB
 #define DISKSIZE_G ((DATASIZE_G/NDATAS)*NDISKS)
 #define SLAB_SHIFT ONE_GB_SHIFT
 #define SLAB_MASK ONE_GB_MASK
