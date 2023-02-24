@@ -1,4 +1,36 @@
-docker run random 1 2
+# How to install docker
+
+## Install prerequisites and Docker
+
+sudo apt-get update
+sudo apt-get install \
+   apt-transport-https \
+   ca-certificates \
+   curl \
+   gnupg \
+   lsb-release
+
+sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 7EA0A9C3F273FCD8
+
+echo \
+  "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+sudo apt-get update
+sudo apt-get install -y apparmor docker-ce
+
+## Create a docker group
+
+The creation of a docker group allows you to run Docker without the sudo command.
+
+sudo usermod -aG docker $USER
+
+Logout and then login again, then run the hello-world container.
+
+docker run hello-world
+
+# How to run test
+
 docker run -m 64m random 1 2
 
 You can ignore the message:
