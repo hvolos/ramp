@@ -1,0 +1,31 @@
+---
+- hosts: all
+  gather_facts: yes
+  tasks:
+    - set_fact:
+        ibip: "{{ansible_eth2['ipv4'].address}}"
+- hosts: 
+    - manager
+    - monitor
+  tasks:
+    - name: add the ib_ipoib module
+      modprobe:
+        name: ib_ipoib
+        state: present
+      sudo: yes
+    - name: setup infiniband nic 
+      shell: ifconfig ib0 {{ ibip }}/24
+      sudo: yes
+- hosts: manager
+  tasks:  
+    - name: truncate portal.list
+      shell: "truncate -s 0 {{hydra_home}}/setup/portal.list"
+    - name: add number of resource monitor nodes to portal.list
+      lineinfile: 
+        dest: "{{hydra_home}}/setup/portal.list"
+        line: "{{ groups['monitor'] | length }}"
+    - name: add resource monitor nodes to portal.list
+      lineinfile: 
+        dest: "{{hydra_home}}/setup/portal.list"
+        line: "{{ hostvars[item]['ibip'] }}:9400"
+      with_items: groups['monitor']

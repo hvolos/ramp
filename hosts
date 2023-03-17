@@ -1,0 +1,10 @@
+[all:vars]
+hydra_home=/users/hvolos01/Hydra
+
+[manager]
+node0
+
+[monitor]
+node1
+node2
+node3

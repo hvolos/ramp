@@ -1,0 +1,26 @@
+---
+- hosts: monitor
+  tasks:
+    - name: synchronize source from local directory to remote directories
+      synchronize:
+        src: "{{ hydra_home }}"
+        dest: "{{ hydra_home | dirname }}"
+    - name: compile resource monitor
+      shell: make
+      args:
+        chdir: "{{ hydra_home }}/resource_monitor"
+- hosts: manager
+  tasks:
+    - name: compile resilience manager 
+      shell: |
+        ./autogen.sh
+        ./configure
+        make
+      args:
+        chdir: "{{ hydra_home }}/resilience_manager"
+- hosts: manager
+  tasks:
+    - name: install resilience manager 
+      shell: sudo -E make install
+      args:
+        chdir: "{{ hydra_home }}/resilience_manager"        

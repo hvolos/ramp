@@ -1,0 +1,12 @@
+---
+- hosts: all
+  gather_facts: yes
+  tasks:
+    - set_fact:
+        ibip: "{{ ansible_eth2['ipv4'].address }}"
+- hosts: monitor
+  tasks:  
+    - name: start resource monitor
+      shell: "./resource_monitor {{ ibip }} 9400"
+      args:
+        chdir: "{{ hydra_home }}/resource_monitor"
