@@ -3,7 +3,7 @@
 ## Install prerequisites and Docker
 
 sudo apt-get update
-sudo apt-get install \
+sudo apt-get -y install \
    apt-transport-https \
    ca-certificates \
    curl \
@@ -30,6 +30,8 @@ Logout and then login again, then run the hello-world container.
 docker run hello-world
 
 # How to run test
+
+docker build -t random .
 
 docker run -m 64m random 1 2
 
