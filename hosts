@@ -1,5 +1,5 @@
 [all:vars]
-hydra_home=/users/hvolos01/Hydra
+hydra_home=/users/hvolos01/hydra
 
 [manager]
 node0
