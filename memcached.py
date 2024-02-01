@@ -1,3 +1,9 @@
+from typing import Dict, Iterable, Optional
+
+import enoslib as en
+
+from enoslib.objects import Host, PathLike
+
 class Memcached(en.service.service.Service):
   def __init__(
     self, 
