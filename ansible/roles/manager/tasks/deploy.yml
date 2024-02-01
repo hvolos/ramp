@@ -1,0 +1,35 @@
+---
+- name: compile resilience manager 
+  shell: |
+    ./autogen.sh
+    ./configure
+    make
+  args:
+    chdir: "{{ hydra_home }}/resilience_manager"
+
+- name: install resilience manager 
+  shell: sudo -E make install
+  args:
+    chdir: "{{ hydra_home }}/resilience_manager"        
+
+- name: truncate portal.list
+  shell: "truncate -s 0 {{hydra_home}}/setup/portal.list"
+
+- name: add number of resource monitor nodes to portal.list
+  lineinfile: 
+    dest: "{{hydra_home}}/setup/portal.list"
+    line: "{{ groups['monitor'] | length }}"
+
+- name: add resource monitor nodes to portal.list
+  lineinfile: 
+    dest: "{{hydra_home}}/setup/portal.list"
+    line: "{{ hostvars[item]['ibip'] }}:9400"
+  with_items: groups['monitor']
+
+- name: disable existing swap partitions
+  shell: "sudo swapoff /dev/sda3"
+  
+- name: create a resilience manager
+  shell: "sudo -E ./resilience_manager_setup.sh"
+  args:
+    chdir: "{{ hydra_home }}/setup"

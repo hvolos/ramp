@@ -1,0 +1,9 @@
+---
+- name: add the ib_ipoib module
+  modprobe:
+    name: ib_ipoib
+    state: present
+  sudo: yes
+- name: setup infiniband nic 
+  shell: ifconfig ib0 {{ ibip }}/24
+  sudo: yes

@@ -1,9 +1,0 @@
----
-- hosts: manager
-  tasks:  
-    - name: disable existing swap partitions
-      shell: "sudo swapoff /dev/sda3"
-    - name: create a resilience manager
-      shell: "sudo -E ./resilience_manager_setup.sh"
-      args:
-        chdir: "{{ hydra_home }}/setup"
