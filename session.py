@@ -86,23 +86,11 @@ class Session:
         quick way to deploy a simple monitoring stack based on dstat on your nodes.
         It's opinionated out of the box but allow for some convenient customizations.
 
-        dstat metrics are dumped into a csv file by default (-o option) and
-        retrieved when backuping.
-
-
         Args:
             nodes: the nodes to install dstat on
             options: options to pass to dstat.
             priors : priors to apply
             extra_vars: extra vars to pass to Ansible
-
-
-        Examples:
-
-            .. literalinclude:: examples/dstat.py
-                :language: python
-                :linenos:
-
 
         """
         self.cmd = cmd
@@ -134,11 +122,16 @@ class Session:
                 when="ansible_os_family == 'Debian'",
                 become="yes", become_user="root"
             )
+            p.debug(
+                msg = f"DEBUG {self.cmd}",
+            )
             p.shell(
                 bg_start(self.session, f"{self.cmd}"),
                 # chdir=str(self.remote_working_dir),
-                task_name=f"Running dstat with the options",
+                task_name=f"Running {self.cmd} with the options",
             )
+            results = p.results
+        print(results)
 
     def destroy(self):
         """Destroy the session.

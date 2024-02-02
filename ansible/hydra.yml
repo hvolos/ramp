@@ -10,7 +10,7 @@
   roles:
     - monitor
 
-- name: Hydra Resilience Manager
-  hosts: manager
-  roles:
-    - manager
+# - name: Hydra Resilience Manager
+#   hosts: manager
+#   roles:
+#     - manager

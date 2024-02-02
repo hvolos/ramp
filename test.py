@@ -44,31 +44,19 @@ provider = Static(conf)
 
 roles, networks = provider.init()
 
-# memcached = Memcached(nodes = roles['manager'], mem = 256)
-# memcached.prepare()
-# memcached.deploy()
-# memcached.destroy()
+def register_command_stdout_to_variable(var, cmd, nodes):
+    d = {}
+    results = en.run_command(cmd, roles = nodes, task_name = f"Register { cmd } stdout to variable {var}")
+    for result in results:
+        if result.status == 'OK':
+            d[result.host] = result.stdout
+    return {var: d}
 
-# with en.actions(roles=roles) as p:
-#   p.copy(
-#         dest="~/test1",
-#         content="TEST1",
-#         task_name="test1"
-#     )
-#   p.copy(
-#         dest="~/test2",
-#         content="TEST2",
-#         task_name="test2"
-#     )
-#   p.copy(
-#         dest="~/test3",
-#         content="TEST3",
-#         task_name="test3"
-#     )
+extra_vars = register_command_stdout_to_variable(var = 'ibip', cmd = "ip -o -4 address show | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles)
 
 HYDRA_PATH: str = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 
-def deploy(roles):
+def deploy_hydra(roles):
     """Deploy Hydra"""
     extra_vars = {
         "enos_action": "deploy",
@@ -86,16 +74,21 @@ def deploy(roles):
     }
     extra_vars.update(extra_vars)
     _playbook = os.path.join(HYDRA_PATH, "ansible", "hydra.yml")
-    run_ansible([_playbook], roles=roles, extra_vars=extra_vars)
+    r = run_ansible([_playbook], roles=roles, extra_vars=extra_vars)
+    print(r)
 
-# deploy(roles)
+# deploy_hydra(roles)
 
-result = en.gather_facts(roles=roles)
+# result = en.gather_facts(roles=roles)
 
-session = Session(cmd = "~/hydra/resource_monitor/resource_monitor {{ ansible_facts[inventory_hostname]['ansible_eth2']['ipv4'].address }} 9400", session = "resource_monitor", nodes = roles['monitor'], extra_vars = {'ansible_facts': result['ok']})
+cmd = f"{HYDRA_PATH}/resource_monitor/resource_monitor {{{{ hostvars[inventory_hostname]['ibip'][inventory_hostname] }}}} 9400"
+session = Session(cmd = cmd, session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
 
 session.deploy()
 
 session.output()
 
-# print(result['ok']['static-0']['ansible_eth2']['ipv4']['address'])
+# memcached = Memcached(nodes = roles['manager'], mem = 256)
+# memcached.prepare()
+# memcached.deploy()
+# memcached.destroy()

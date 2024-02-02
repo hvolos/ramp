@@ -1,8 +1,4 @@
----
-- name: set facts
-  set_fact:
-    ibip: "{{ ansible_eth2['ipv4'].address }}"
-
+---  
 - name: synchronize source from local directory to remote directories
   synchronize:
     src: "{{ hydra_home }}"
