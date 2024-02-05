@@ -78,6 +78,7 @@ class Session:
         session: str,
         nodes: Iterable[Host],
         options: str = "-aT",
+        remote_working_dir: str = None,
         extra_vars: Optional[Dict] = None,
     ):
         """Deploy dstat on all hosts.
@@ -90,6 +91,7 @@ class Session:
             nodes: the nodes to install dstat on
             options: options to pass to dstat.
             priors : priors to apply
+            remote_working_dir: remote working directory
             extra_vars: extra vars to pass to Ansible
 
         """
@@ -99,7 +101,7 @@ class Session:
         self.options = options
         # make it unique per instance
         # identifier = str(time_ns())
-        # self.remote_working_dir = Path(REMOTE_OUTPUT_DIR) / identifier
+        self.remote_working_dir = remote_working_dir
 
         # make it unique per instance
         # self.backup_dir = _set_dir(backup_dir, LOCAL_OUTPUT_DIR / identifier)
@@ -125,11 +127,17 @@ class Session:
             p.debug(
                 msg = f"DEBUG {self.cmd}",
             )
-            p.shell(
-                bg_start(self.session, f"{self.cmd}"),
-                # chdir=str(self.remote_working_dir),
-                task_name=f"Running {self.cmd} with the options",
-            )
+            if self.remote_working_dir:
+                p.shell(
+                    bg_start(self.session, f"{self.cmd}"),
+                    chdir=str(self.remote_working_dir),
+                    task_name=f"Running {self.cmd} with the options",
+                )
+            else:
+                p.shell(
+                    bg_start(self.session, f"{self.cmd}"),
+                    task_name=f"Running {self.cmd} with the options",
+                )
             results = p.results
         print(results)
 

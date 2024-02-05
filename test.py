@@ -52,41 +52,30 @@ def register_command_stdout_to_variable(var, cmd, nodes):
             d[result.host] = result.stdout
     return {var: d}
 
-extra_vars = register_command_stdout_to_variable(var = 'ibip', cmd = "ip -o -4 address show | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles)
+extra_vars = register_command_stdout_to_variable(var = 'ibip', cmd = "ip -o -4 address show | grep eth | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles)
 
 HYDRA_PATH: str = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 
-def deploy_hydra(roles):
+def deploy_hydra(roles, extra_vars):
     """Deploy Hydra"""
-    extra_vars = {
+    extra_vars.update({
         "enos_action": "deploy",
         "hydra_home": HYDRA_PATH,
-        # "collector_address": get_address(self.collector, self.networks),
-        # "collector_port": collector_port,
-        # "collector_env": self.collector_env,
-        # "collector_type": "influxdb",
-        # "agent_conf": self.agent_conf,
-        # "agent_image": self.agent_image,
-        # "remote_working_dir": self.remote_working_dir,
-        # "ui_address": ui_address,
-        # "ui_port": self.ui_env["GF_SERVER_HTTP_PORT"],
-        # "ui_env": self.ui_env,
-    }
-    extra_vars.update(extra_vars)
+    })
     _playbook = os.path.join(HYDRA_PATH, "ansible", "hydra.yml")
     r = run_ansible([_playbook], roles=roles, extra_vars=extra_vars)
-    print(r)
 
-# deploy_hydra(roles)
-
-# result = en.gather_facts(roles=roles)
+deploy_hydra(roles, extra_vars)
 
 cmd = f"{HYDRA_PATH}/resource_monitor/resource_monitor {{{{ hostvars[inventory_hostname]['ibip'][inventory_hostname] }}}} 9400"
-session = Session(cmd = cmd, session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
+resource_monitor = Session(cmd = cmd, session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
+resource_monitor.deploy()
+resource_monitor.output()
 
-session.deploy()
-
-session.output()
+cmd = f"sudo -E {HYDRA_PATH}/setup/resilience_manager_setup.sh"
+resilience_manager = Session(cmd = cmd, session = "resilience_manager", nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), extra_vars = extra_vars)
+resilience_manager.deploy()
+resilience_manager.output()
 
 # memcached = Memcached(nodes = roles['manager'], mem = 256)
 # memcached.prepare()

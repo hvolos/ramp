@@ -1,9 +1,4 @@
 ---  
-- name: synchronize source from local directory to remote directories
-  synchronize:
-    src: "{{ hydra_home }}"
-    dest: "{{ hydra_home | dirname }}"
-
 - name: compile resource monitor
   shell: make
   args:

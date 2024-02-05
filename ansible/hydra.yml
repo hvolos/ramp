@@ -8,9 +8,11 @@
 - name: Hydra Resource Monitor
   hosts: monitor
   roles:
+    - common
     - monitor
 
-# - name: Hydra Resilience Manager
-#   hosts: manager
-#   roles:
-#     - manager
+- name: Hydra Resilience Manager
+  hosts: manager
+  roles:
+    - common
+    - manager
