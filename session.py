@@ -77,7 +77,6 @@ class Session:
         cmd: str,
         session: str,
         nodes: Iterable[Host],
-        options: str = "-aT",
         remote_working_dir: str = None,
         extra_vars: Optional[Dict] = None,
     ):
@@ -89,7 +88,6 @@ class Session:
 
         Args:
             nodes: the nodes to install dstat on
-            options: options to pass to dstat.
             priors : priors to apply
             remote_working_dir: remote working directory
             extra_vars: extra vars to pass to Ansible
@@ -124,9 +122,7 @@ class Session:
                 when="ansible_os_family == 'Debian'",
                 become="yes", become_user="root"
             )
-            p.debug(
-                msg = f"DEBUG {self.cmd}",
-            )
+            cmd.deploy_actions(self)
             if self.remote_working_dir:
                 p.shell(
                     bg_start(self.session, f"{self.cmd}"),
