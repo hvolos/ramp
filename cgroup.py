@@ -1,4 +1,5 @@
 import logging
+import os
 import signal
 
 from typing import Dict, Iterable, Optional
@@ -14,7 +15,7 @@ from rich.console import Console
 from rich import print as rprint
 
 
-def cgroup_start(group: str, cmd: str) -> str:
+def cgroup_start(cgroup_controller: str, cgroup_path:str, cmd: str) -> str:
     """Put a command in the background.
 
     Generate the command that will put cmd in background.
@@ -23,7 +24,6 @@ def cgroup_start(group: str, cmd: str) -> str:
     Idempotent
 
     Args:
-        key: session identifier for tmux (must be unique)
         cmd: the command to put in background
 
     Returns:
@@ -31,44 +31,7 @@ def cgroup_start(group: str, cmd: str) -> str:
 
     """
     # supports templating
-    return f"(cgexec '{cmd}'"
-
-
-def bg_stop(key: str, num: int = signal.SIGINT) -> str:
-    """Stop a command that runs in the background.
-
-    Generate the command that will stop a previously started command in the
-    background with :py:func:`bg_start`
-
-    Args:
-        key: session identifier for tmux.
-
-    Returns:
-        command that will stop a tmux session
-    """
-    if num == signal.SIGHUP:
-        # default tmux termination signal
-        # This will send SIGHUP to all the encapsulated processes
-        return f"tmux kill-session -t {key} || true"
-    else:
-        # We prefer send a sigint to all the encapsulated processes
-        cmd = f"(tmux list-panes -t {key} -F '#{{pane_pid}}' | xargs -n1 kill -{int(num)}) || true"  # noqa
-        return cmd
-
-def bg_capture(key: str) -> str:
-    """Capture the output of a command that runs in the background.
-
-    Generate the command that will collect a previously started command in the
-    background with :py:func:`bg_start`
-
-    Args:
-        key: session identifier for tmux.
-
-    Returns:
-        command that will capture the output of a tmux session
-    """
-    cmd = f"tmux capture-pane -t {key} -p"
-    return cmd
+    return f"cgexec -g {cgroup_controller}:{cgroup_path} {cmd}"
 
 class Cgroup:
     def __init__(
@@ -93,7 +56,10 @@ class Cgroup:
 
         """
         self.child = child
-        self.group = None
+        self.cgroup_controller = "memory"
+        self.cgroup_path = "memctl"
+        self.user = "hvolos01"
+        self.memlimit = 256
         # self.nodes = nodes
         # self.options = options
         # make it unique per instance
@@ -110,11 +76,20 @@ class Cgroup:
         """Deploy the session."""
         a = en.actions()        
         a.apt(
-            task_name="Checking cgroup",
+            task_name="Checking cgroup dependencies",
             name=["cgroup-bin", "cgroup-lite", "libcgroup1"],
             state="present",
             when="ansible_distribution == 'Ubuntu' and ansible_distribution_version == '14.04'",
             become="yes", become_user="root"
+        )
+        a.shell(
+            f"cgcreate -t {self.user} -a {self.user} -g {self.cgroup_controller}:{self.cgroup_path}",
+            task_name="Create cgroup {self.cgroup_controller}:{self.cgroup_path}",
+            become="yes", become_user="root"
+        )
+        dest = os.path.join("/sys/fs/cgroup", self.cgroup_controller, self.cgroup_path, "memory.limit_in_bytes")
+        a.shell(
+            f"echo {self.memlimit}m > {dest}"
         )
 
         # Collect the child actions for execution. 
@@ -126,16 +101,9 @@ class Cgroup:
 
         last_child_cmd = last_child_action['shell']
         child_actions.shell(
-            cgroup_start(self.group, f"{last_child_cmd}"),
+            cgroup_start(self.cgroup_controller, self.cgroup_path, f"{last_child_cmd}"),
             task_name=f"Running {last_child_cmd} in a tmux session",
         )
-
-        # # Execute the actions
-        # with en.actions(
-        #     roles=self.nodes, extra_vars=self.extra_vars, gather_facts=True, 
-        #     priors = [a, child_actions]
-        # ) as p:
-        #     pass
 
         return en.actions(priors = [a, child_actions])
 

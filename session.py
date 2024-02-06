@@ -133,7 +133,8 @@ class Session:
             bg_start(self.session, f"{last_child_cmd}"), 
             task_name=f"Running {last_child_cmd} in a tmux session",
             **shell_kwargs
-        )
+        ) 
+        print(bg_start(self.session, f"{last_child_cmd}"))     
 
         # Execute the actions
         with en.actions(
