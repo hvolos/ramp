@@ -14,6 +14,7 @@ from enoslib.objects import Host, PathLike
 
 from memcached import Memcached
 from session import Session
+from cgroup import Cgroup
 
 en.init_logging(level=logging.INFO)
 
@@ -77,9 +78,7 @@ def deploy_hydra(roles, extra_vars):
 # resilience_manager.deploy()
 # resilience_manager.output()
 
-memcached = Session(cmd = Memcached(mem = 256), session = "memcached", nodes = roles['manager'])
-
-# memcached = Memcached(nodes = roles['manager'], mem = 256)
-# memcached.prepare()
-# memcached.deploy()
-# memcached.destroy()
+# memcached = Session(Memcached(mem = 256), session = "memcached", nodes = roles['manager'])
+memcached = Session(Cgroup(Memcached(mem = 256)), session = "memcached", nodes = roles['manager'])
+memcached.deploy()
+#memcached.destroy()

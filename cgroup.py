@@ -14,7 +14,7 @@ from rich.console import Console
 from rich import print as rprint
 
 
-def bg_start(key: str, cmd: str) -> str:
+def cgroup_start(group: str, cmd: str) -> str:
     """Put a command in the background.
 
     Generate the command that will put cmd in background.
@@ -31,7 +31,7 @@ def bg_start(key: str, cmd: str) -> str:
 
     """
     # supports templating
-    return f"(tmux ls | grep {key}) ||tmux new-session -s {key} -d '{cmd}'"
+    return f"(cgexec '{cmd}'"
 
 
 def bg_stop(key: str, num: int = signal.SIGINT) -> str:
@@ -70,13 +70,12 @@ def bg_capture(key: str) -> str:
     cmd = f"tmux capture-pane -t {key} -p"
     return cmd
 
-class Session:
+class Cgroup:
     def __init__(
         self,
         child: str,
         *,
-        session: str,
-        nodes: Iterable[Host],
+        # nodes: Iterable[Host],
         remote_working_dir: str = None,
         extra_vars: Optional[Dict] = None,
     ):
@@ -94,12 +93,11 @@ class Session:
 
         """
         self.child = child
-        self.session = session
-        self.nodes = nodes
+        self.group = None
+        # self.nodes = nodes
         # self.options = options
         # make it unique per instance
         # identifier = str(time_ns())
-        self.remote_working_dir = remote_working_dir
 
         # make it unique per instance
         # self.backup_dir = _set_dir(backup_dir, LOCAL_OUTPUT_DIR / identifier)
@@ -111,36 +109,35 @@ class Session:
     def deploy(self):
         """Deploy the session."""
         a = en.actions()        
-        a.shell(
-            "which tmux || (apt update && apt install -y tmux)",
-            task_name="Checking tmux",
-            when="ansible_os_family == 'Debian'",
+        a.apt(
+            task_name="Checking cgroup",
+            name=["cgroup-bin", "cgroup-lite", "libcgroup1"],
+            state="present",
+            when="ansible_distribution == 'Ubuntu' and ansible_distribution_version == '14.04'",
             become="yes", become_user="root"
         )
 
         # Collect the child actions for execution. 
         # Ensure the last child action is a shell task and modify it to enclose it 
-        # within a tmux command.
+        # within a cgexec command.
         child_actions = self.child.deploy()
         last_child_action = child_actions._tasks.pop()
         assert 'shell' in last_child_action
 
         last_child_cmd = last_child_action['shell']
-        shell_kwargs = {}
-        if self.remote_working_dir:
-            shell_kwargs['chdir'] = str(self.remote_working_dir)
         child_actions.shell(
-            bg_start(self.session, f"{last_child_cmd}"), 
+            cgroup_start(self.group, f"{last_child_cmd}"),
             task_name=f"Running {last_child_cmd} in a tmux session",
-            **shell_kwargs
         )
 
-        # Execute the actions
-        with en.actions(
-            roles=self.nodes, extra_vars=self.extra_vars, gather_facts=True, 
-            priors = [a, child_actions]
-        ) as p:
-            pass
+        # # Execute the actions
+        # with en.actions(
+        #     roles=self.nodes, extra_vars=self.extra_vars, gather_facts=True, 
+        #     priors = [a, child_actions]
+        # ) as p:
+        #     pass
+
+        return en.actions(priors = [a, child_actions])
 
     def destroy(self):
         """Destroy the session.
