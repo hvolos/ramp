@@ -2,7 +2,7 @@ import logging
 import os
 import signal
 
-from typing import Dict, Iterable, Optional
+from typing import Dict, Iterable, List, Optional
 
 import enoslib as en
 
@@ -15,32 +15,37 @@ from rich.console import Console
 from rich import print as rprint
 
 
-def cgroup_start(cgroup_controller: str, cgroup_path:str, cmd: str) -> str:
-    """Put a command in the background.
+class _MemoryCgroup:
+    def __init__(
+        self,
+        cgroup_path: str,
+        limit_in_bytes: int
+    ):
+        self.cgroup_controller = "memory"
+        self.cgroup_path = cgroup_path
+        self.limit_in_bytes = limit_in_bytes
 
-    Generate the command that will put cmd in background.
-    This uses tmux to detach cmd from the current shell session.
+    def controller_path_pair(self):
+        return f"{self.cgroup_controller}:{self.cgroup_path}"
 
-    Idempotent
+    def parameter_path(self, parameter_name: str):
+        return os.path.join("/sys/fs/cgroup", self.cgroup_controller, self.cgroup_path, parameter_name)
 
-    Args:
-        cmd: the command to put in background
+    def register_deploy_actions(self, a):
+        a.shell(
+            f"cgcreate -t {{{{ ansible_user_id }}}} -a {{{{ ansible_user_id }}}} -g {self.controller_path_pair()}",
+            task_name=f"Create cgroup {self.controller_path_pair()}",
+            become="yes", become_user="root"
+        )
+        a.shell(
+            f"echo {self.limit_in_bytes} > {self.parameter_path('memory.limit_in_bytes')}"
+        )
 
-    Returns:
-        command encapsulated in a tmux session identified by the key
-
-    """
-    # supports templating
-    return f"cgexec -g {cgroup_controller}:{cgroup_path} {cmd}"
 
 class Cgroup:
     def __init__(
         self,
         child: str,
-        *,
-        # nodes: Iterable[Host],
-        remote_working_dir: str = None,
-        extra_vars: Optional[Dict] = None,
     ):
         """Deploy dstat on all hosts.
 
@@ -56,41 +61,40 @@ class Cgroup:
 
         """
         self.child = child
-        self.cgroup_controller = "memory"
-        self.cgroup_path = "memctl"
-        self.user = "hvolos01"
-        self.memlimit = 256
-        # self.nodes = nodes
-        # self.options = options
-        # make it unique per instance
-        # identifier = str(time_ns())
+        self.memory_cgroup = _MemoryCgroup(cgroup_path = "memctl", limit_in_bytes = 256*1024*1024)
 
-        # make it unique per instance
-        # self.backup_dir = _set_dir(backup_dir, LOCAL_OUTPUT_DIR / identifier)
+    def _cgexec(cgroup_controller_path_pairs: List[str], cmd: str) -> str:
+        """Put a command in the background.
 
-        # self.output_file = f"{identifier}-{OUTPUT_FILE}"
+        Generate the command that will put cmd in background.
+        This uses tmux to detach cmd from the current shell session.
 
-        self.extra_vars = extra_vars if extra_vars is not None else {}
-    
+        Idempotent
+
+        Args:
+            cmd: the command to put in background
+
+        Returns:
+            command encapsulated in a tmux session identified by the key
+
+        """
+        cgroup_controller_path_pair_str = ' '.join([f"-g {pair}" for pair in cgroup_controller_path_pairs])
+        return f"cgexec {cgroup_controller_path_pair_str} {cmd}"
+
+
     def deploy(self):
-        """Deploy the session."""
+        """Deploy the cgroup."""
         a = en.actions()        
         a.apt(
-            task_name="Checking cgroup dependencies",
+            task_name="Checking cgroup package dependencies",
             name=["cgroup-bin", "cgroup-lite", "libcgroup1"],
             state="present",
             when="ansible_distribution == 'Ubuntu' and ansible_distribution_version == '14.04'",
             become="yes", become_user="root"
         )
-        a.shell(
-            f"cgcreate -t {self.user} -a {self.user} -g {self.cgroup_controller}:{self.cgroup_path}",
-            task_name="Create cgroup {self.cgroup_controller}:{self.cgroup_path}",
-            become="yes", become_user="root"
-        )
-        dest = os.path.join("/sys/fs/cgroup", self.cgroup_controller, self.cgroup_path, "memory.limit_in_bytes")
-        a.shell(
-            f"echo {self.memlimit}m > {dest}"
-        )
+
+        self.memory_cgroup.register_deploy_actions(a)
+        cgroup_controller_path_pairs = [self.memory_cgroup.controller_path_pair()]
 
         # Collect the child actions for execution. 
         # Ensure the last child action is a shell task and modify it to enclose it 
@@ -101,25 +105,14 @@ class Cgroup:
 
         last_child_cmd = last_child_action['shell']
         child_actions.shell(
-            cgroup_start(self.cgroup_controller, self.cgroup_path, f"{last_child_cmd}"),
-            task_name=f"Running {last_child_cmd} in a tmux session",
+            self._cgexec(cgroup_controller_path_pairs, f"{last_child_cmd}"),
+            task_name=f"Running {last_child_cmd} in a cgroup",
         )
 
         return en.actions(priors = [a, child_actions])
 
     def destroy(self):
-        """Destroy the session.
-
-        This kills the session processes on the nodes.
-        """
-        with en.actions(roles=self.nodes, extra_vars=self.extra_vars) as p:
+        """Destroy the cgroup."""
+        a = en.actions()        
             kill_cmd = bg_stop(self.session)
             p.shell(kill_cmd, task_name="Killing existing session")
-
-    def output(self):
-        results = en.run_command(bg_capture(self.session), roles = self.nodes)
-        for result in results:
-            host = result.host
-            for line in result.payload['stdout_lines']:
-                rprint(f"[red]{host}[/red]\t{line}")
-        

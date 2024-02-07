@@ -141,7 +141,10 @@ class Session:
             roles=self.nodes, extra_vars=self.extra_vars, gather_facts=True, 
             priors = [a, child_actions]
         ) as p:
+            results = p.results
             pass
+        for result in results:
+            print(result)
 
     def destroy(self):
         """Destroy the session.

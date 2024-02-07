@@ -82,3 +82,4 @@ def deploy_hydra(roles, extra_vars):
 memcached = Session(Cgroup(Memcached(mem = 256)), session = "memcached", nodes = roles['manager'])
 memcached.deploy()
 #memcached.destroy()
+#memcached.destroy()
