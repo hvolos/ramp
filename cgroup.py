@@ -114,5 +114,5 @@ class Cgroup:
     def destroy(self):
         """Destroy the cgroup."""
         a = en.actions()        
-            kill_cmd = bg_stop(self.session)
-            p.shell(kill_cmd, task_name="Killing existing session")
+        kill_cmd = bg_stop(self.session)
+        p.shell(kill_cmd, task_name="Killing existing session")

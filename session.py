@@ -13,6 +13,22 @@ from rich.console import Console
 
 from rich import print as rprint
 
+class Command(en.service.service.Service):
+  def __init__(
+    self, 
+    cmd: str):
+    """Run command on all hosts.
+
+    Args:
+      cmd: the command to run
+    """
+    self.cmd = cmd
+
+  def deploy(self):
+    a = en.actions()
+    a.shell(self.cmd) 
+    return a
+
 
 def bg_start(key: str, cmd: str) -> str:
     """Put a command in the background.
@@ -78,6 +94,7 @@ class Session:
         session: str,
         nodes: Iterable[Host],
         remote_working_dir: str = None,
+        sudo: bool = False, 
         extra_vars: Optional[Dict] = None,
     ):
         """Deploy dstat on all hosts.
@@ -100,6 +117,8 @@ class Session:
         # make it unique per instance
         # identifier = str(time_ns())
         self.remote_working_dir = remote_working_dir
+
+        self.sudo = sudo 
 
         # make it unique per instance
         # self.backup_dir = _set_dir(backup_dir, LOCAL_OUTPUT_DIR / identifier)
@@ -129,11 +148,18 @@ class Session:
         shell_kwargs = {}
         if self.remote_working_dir:
             shell_kwargs['chdir'] = str(self.remote_working_dir)
-        child_actions.shell(
-            bg_start(self.session, f"{last_child_cmd}"), 
-            task_name=f"Running {last_child_cmd} in a tmux session",
-            **shell_kwargs
-        ) 
+        if self.sudo:
+            child_actions.shell(
+                bg_start(self.session, f"{last_child_cmd}"), 
+                task_name=f"Running {last_child_cmd} in a tmux session",
+                become="yes", become_user="root",
+                **shell_kwargs)
+
+        else:
+            child_actions.shell(
+                bg_start(self.session, f"{last_child_cmd}"), 
+                task_name=f"Running {last_child_cmd} in a tmux session",
+                **shell_kwargs) 
         print(bg_start(self.session, f"{last_child_cmd}"))     
 
         # Execute the actions

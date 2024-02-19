@@ -21,11 +21,6 @@
     line: "{{ groups['monitor'] | length }}"
 
 - name: add resource monitor nodes to portal.list
-  debug:
-    msg: "ITEM {{ item }}"
-  with_items: "{{ groups['monitor'] }}"
-
-- name: add resource monitor nodes to portal.list
   lineinfile: 
     dest: "{{hydra_home}}/setup/portal.list"
     line: "{{ hostvars[item]['ibip'][item] }}:9400"
