@@ -1,7 +1,7 @@
 import logging
 import signal
 
-from typing import Dict, Iterable, Optional
+from typing import List, Dict, Iterable, Optional
 
 import enoslib as en
 
@@ -14,29 +14,149 @@ from rich.console import Console
 from rich import print as rprint
 
 class Command:
-  def __init__(
-    self, 
-    cmd: str):
-    """Run command on all hosts.
+    def __init__(
+        self, 
+        cmd: str,
+        nodes: Iterable[Host],
+        remote_working_dir: str = None,
+        sudo: bool = False, 
+        extra_vars: Optional[Dict] = None,
+    ):
+        """Run command on all hosts.
 
-    Args:
-      cmd: the command to run
-    """
-    self.cmd = cmd
+        Args:
+            cmd: the command to run
+        """
+        self.cmd = cmd
+        self.nodes = nodes
+        self.remote_working_dir = remote_working_dir
+        self.sudo = sudo
+        self.extra_vars = extra_vars
+        self.results = None
 
-  def deploy_actions(self):
-    a = en.actions()
-    a.shell(self.cmd) 
-    return a
+    def deploy_actions(self):
+        a = en.actions()
+        shell_kwargs = {}
+        if self.remote_working_dir:
+            shell_kwargs['chdir'] = str(self.remote_working_dir)
+        if self.sudo:
+            shell_kwargs['become'] = "yes"
+            shell_kwargs['become_user'] = "root"
+        a.shell(self.cmd, **shell_kwargs) 
+        return a
 
-  def deploy(self):
-    a = self.deploy_actions()
-    with en.actions(
-        roles=self.nodes, extra_vars=self.extra_vars, gather_facts=True, 
-        priors = [a]
-    ) as p:
-        results = p.results
-        pass
+    def deploy(self):
+        a = self.deploy_actions()
+        with en.actions(
+            roles=self.nodes, extra_vars=self.extra_vars, gather_facts=True, 
+            priors = [a]
+        ) as p:
+            self.results = p.results
+
+    def stdout_to_variable(self, var):
+        """Returns a dictionary with standard output assigned to a variable
+
+        Args:
+            child: the variable
+        """
+        d = {}
+        for result in self.results:
+            print(result)
+            # if result.status == 'OK':
+            #     d[result.host] = result.stdout
+        return {var: d}
+
+
+class _MemoryCgroup:
+    def __init__(
+        self,
+        cgroup_path: str,
+        limit_in_bytes: int
+    ):
+        self.cgroup_controller = "memory"
+        self.cgroup_path = cgroup_path
+        self.limit_in_bytes = limit_in_bytes
+
+    def controller_path_pair(self):
+        return f"{self.cgroup_controller}:{self.cgroup_path}"
+
+    def parameter_path(self, parameter_name: str):
+        return os.path.join("/sys/fs/cgroup", self.cgroup_controller, self.cgroup_path, parameter_name)
+
+    def register_deploy_actions(self, a):
+        a.shell(
+            f"cgcreate -t {{{{ ansible_user_id }}}} -a {{{{ ansible_user_id }}}} -g {self.controller_path_pair()}",
+            task_name=f"Create cgroup {self.controller_path_pair()}",
+            become="yes", become_user="root"
+        )
+        a.shell(
+            f"echo {self.limit_in_bytes} > {self.parameter_path('memory.limit_in_bytes')}"
+        )
+
+
+class Cgroup:
+    def __init__(
+        self,
+        child: str,
+    ):
+        """Run a command in a control group
+
+        Args:
+            child: the command to run in a control group
+        """
+        self.child = child
+        self.memory_cgroup = _MemoryCgroup(cgroup_path = "memctl", limit_in_bytes = 256*1024*1024)
+
+    def _cgexec(cgroup_controller_path_pairs: List[str], cmd: str) -> str:
+        """Run a command in a given control group
+
+        Generate the command that will run a command in a given control group.
+
+        Args:
+            cmd: the command to run in a control group
+
+        Returns:
+            command encapsulated in a a cgexec session
+
+        """
+        cgroup_controller_path_pair_str = ' '.join([f"-g {pair}" for pair in cgroup_controller_path_pairs])
+        return f"cgexec {cgroup_controller_path_pair_str} {cmd}"
+
+
+    def deploy_actions(self):
+        """Deploy the cgroup."""
+        a = en.actions()        
+        a.apt(
+            task_name="Checking cgroup package dependencies",
+            name=["cgroup-bin", "cgroup-lite", "libcgroup1"],
+            state="present",
+            when="ansible_distribution == 'Ubuntu' and ansible_distribution_version == '14.04'",
+            become="yes", become_user="root"
+        )
+
+        self.memory_cgroup.register_deploy_actions(a)
+        cgroup_controller_path_pairs = [self.memory_cgroup.controller_path_pair()]
+
+        # Collect the child actions for execution. 
+        # Ensure the last child action is a shell task and modify it to enclose it 
+        # within a cgexec command.
+        child_actions = self.child.deploy_actions()
+        last_child_action = child_actions._tasks.pop()
+        assert 'shell' in last_child_action
+
+        last_child_cmd = last_child_action['shell']
+        child_actions.shell(
+            self._cgexec(cgroup_controller_path_pairs, f"{last_child_cmd}"),
+            task_name=f"Running {last_child_cmd} in a cgroup",
+        )
+
+        return en.actions(priors = [a, child_actions])
+
+    def destroy(self):
+        """Destroy the cgroup."""
+        a = en.actions()        
+        kill_cmd = bg_stop(self.session)
+        p.shell(kill_cmd, task_name="Killing existing session")
 
 
 class Session:
@@ -66,7 +186,6 @@ class Session:
         # make it unique per instance
         # identifier = str(time_ns())
         self.remote_working_dir = remote_working_dir
-
         self.sudo = sudo 
 
         # make it unique per instance
@@ -148,7 +267,7 @@ class Session:
         # Collect the child actions for execution. 
         # Ensure the last child action is a shell task and modify it to enclose it 
         # within a tmux command.
-        child_actions = self.child.deploy()
+        child_actions = self.child.deploy_actions()
         last_child_action = child_actions._tasks.pop()
         assert 'shell' in last_child_action
 

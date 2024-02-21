@@ -13,9 +13,7 @@ from enoslib.config import config_context, set_config
 from enoslib.objects import Host, PathLike
 
 from memcached import Memcached
-from session import Session
-from session import Command
-from cgroup import Cgroup
+from command import Command, Cgroup, Session
 
 en.init_logging(level=logging.INFO)
 
@@ -46,15 +44,9 @@ provider = Static(conf)
 
 roles, networks = provider.init()
 
-def register_command_stdout_to_variable(var, cmd, nodes):
-    d = {}
-    results = en.run_command(cmd, roles = nodes, task_name = f"Register { cmd } stdout to variable {var}")
-    for result in results:
-        if result.status == 'OK':
-            d[result.host] = result.stdout
-    return {var: d}
-
-extra_vars = register_command_stdout_to_variable(var = 'ibip', cmd = "ip -o -4 address show | grep eth | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles)
+ibip = Command(cmd = "ip -o -4 address show | grep eth | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles)
+ibip.deploy()
+extra_vars = ibip.stdout_to_variable('ibip')
 
 HYDRA_PATH: str = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 
@@ -67,17 +59,21 @@ def deploy_hydra(roles, extra_vars):
     _playbook = os.path.join(HYDRA_PATH, "ansible", "hydra.yml")
     r = run_ansible([_playbook], roles=roles, extra_vars=extra_vars)
 
-deploy_hydra(roles, extra_vars)
+whoami = Command("whoami", nodes = roles['monitor'], sudo=True)
+whoami.deploy()
 
-cmd = f"{HYDRA_PATH}/resource_monitor/resource_monitor {{{{ hostvars[inventory_hostname]['ibip'][inventory_hostname] }}}} 9400"
-resource_monitor = Session(Command(cmd), session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
-resource_monitor.deploy()
-resource_monitor.output()
 
-cmd = f"{HYDRA_PATH}/setup/resilience_manager_setup.sh"
-shell_kwargs = {}
-shell_kwargs['chdir'] = os.path.join(HYDRA_PATH, "setup")
-results = en.run_command(cmd, roles = roles['manager'], task_name = f"Run { cmd }", run_as="root", extra_vars = extra_vars, **shell_kwargs)
+# deploy_hydra(roles, extra_vars)
+
+# cmd = f"{HYDRA_PATH}/resource_monitor/resource_monitor {{{{ hostvars[inventory_hostname]['ibip'][inventory_hostname] }}}} 9400"
+# resource_monitor = Session(Command(cmd), session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
+# resource_monitor.deploy()
+# resource_monitor.output()
+
+# cmd = f"{HYDRA_PATH}/setup/resilience_manager_setup.sh"
+# shell_kwargs = {}
+# shell_kwargs['chdir'] = os.path.join(HYDRA_PATH, "setup")
+# results = en.run_command(cmd, roles = roles['manager'], task_name = f"Run { cmd }", run_as="root", extra_vars = extra_vars, **shell_kwargs)
 
 # resilience_manager = Session(Command(cmd), session = "resilience_manager", nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True, extra_vars = extra_vars)
 # resilience_manager.deploy()
