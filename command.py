@@ -18,6 +18,7 @@ class Command:
         self, 
         cmd: str,
         nodes: Iterable[Host],
+        task_name: str = None,
         remote_working_dir: str = None,
         sudo: bool = False, 
         extra_vars: Optional[Dict] = None,
@@ -29,6 +30,7 @@ class Command:
         """
         self.cmd = cmd
         self.nodes = nodes
+        self.task_name = task_name
         self.remote_working_dir = remote_working_dir
         self.sudo = sudo
         self.extra_vars = extra_vars
@@ -42,6 +44,8 @@ class Command:
         if self.sudo:
             shell_kwargs['become'] = "yes"
             shell_kwargs['become_user'] = "root"
+        if self.task_name:
+            shell_kwargs['task_name'] = self.task_name
         a.shell(self.cmd, **shell_kwargs) 
         return a
 
@@ -53,17 +57,17 @@ class Command:
         ) as p:
             self.results = p.results
 
-    def stdout_to_variable(self, var):
-        """Returns a dictionary with standard output assigned to a variable
+    def stdout_to_dict(self, var):
+        """Returns a dictionary that contains a variable assigned with the standard output of the command
 
         Args:
-            child: the variable
+            var: the variable that is assigned the standard output of the command
         """
         d = {}
-        for result in self.results:
-            print(result)
-            # if result.status == 'OK':
-            #     d[result.host] = result.stdout
+        task_filter = self.task_name if self.task_name else 'shell'
+        for result in self.results.filter(task=task_filter):
+            if result.status == 'OK':
+                d[result.host] = result.stdout
         return {var: d}
 
 
@@ -110,7 +114,7 @@ class Cgroup:
     def _cgexec(cgroup_controller_path_pairs: List[str], cmd: str) -> str:
         """Run a command in a given control group
 
-        Generate the command that will run a command in a given control group.
+        Generate the command to start a process in a given control group.
 
         Args:
             cmd: the command to run in a control group

@@ -12,7 +12,7 @@ from enoslib.config import config_context, set_config
 
 from enoslib.objects import Host, PathLike
 
-from memcached import Memcached
+from memcached import Memcached, MemcachedPerf
 from command import Command, Cgroup, Session
 
 en.init_logging(level=logging.INFO)
@@ -22,21 +22,29 @@ inventory = os.path.join(os.getcwd(), "hosts")
 
 # claim the resources
 conf = Configuration.from_settings()\
-    .add_machine(roles=["manager"],
+    .add_machine(roles=["hydra", "manager"],
                  address="node0",
                  alias="static-0",
                  user="hvolos01")\
-    .add_machine(roles=["monitor"],
+    .add_machine(roles=["hydra", "monitor"],
                  address="node1",
                  alias="static-1",
                  user="hvolos01")\
-    .add_machine(roles=["monitor"],
+    .add_machine(roles=["hydra", "monitor"],
                  address="node2",
                  alias="static-2",
                  user="hvolos01")\
-    .add_machine(roles=["monitor"],
+    .add_machine(roles=["hydra", "monitor"],
                  address="node3",
                  alias="static-3",
+                 user="hvolos01")\
+    .add_machine(roles=["workload"],
+                 address="workload-node0",
+                 alias="static-4",
+                 user="hvolos01")\
+    .add_machine(roles=["workload"],
+                 address="workload-node1",
+                 alias="static-5",
                  user="hvolos01")\
     .finalize()
 
@@ -44,10 +52,10 @@ provider = Static(conf)
 
 roles, networks = provider.init()
 
-ibip = Command(cmd = "ip -o -4 address show | grep eth | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles)
+ibip = Command(cmd = "ip -o -4 address show | grep eth | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles['hydra'])
 ibip.deploy()
-extra_vars = ibip.stdout_to_variable('ibip')
-
+extra_vars = ibip.stdout_to_dict('ibip')
+print(extra_vars)
 HYDRA_PATH: str = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 
 def deploy_hydra(roles, extra_vars):
@@ -58,10 +66,6 @@ def deploy_hydra(roles, extra_vars):
     })
     _playbook = os.path.join(HYDRA_PATH, "ansible", "hydra.yml")
     r = run_ansible([_playbook], roles=roles, extra_vars=extra_vars)
-
-whoami = Command("whoami", nodes = roles['monitor'], sudo=True)
-whoami.deploy()
-
 
 # deploy_hydra(roles, extra_vars)
 
@@ -83,3 +87,5 @@ whoami.deploy()
 # memcached = Session(Cgroup(Memcached(mem = 256)), session = "memcached", nodes = roles['manager'])
 # memcached.deploy()
 # memcached.destroy()
+
+memcache_perf = MemcachePerf(nodes = roles['workload'])
