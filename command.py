@@ -299,8 +299,6 @@ class Session:
         ) as p:
             results = p.results
             pass
-        for result in results:
-            print(result)
 
     def destroy(self):
         """Destroy the session.

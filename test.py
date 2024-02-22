@@ -12,7 +12,7 @@ from enoslib.config import config_context, set_config
 
 from enoslib.objects import Host, PathLike
 
-from memcached import Memcached, MemcachedPerf
+from memcached import Memcached, MemcachePerf
 from command import Command, Cgroup, Session
 
 en.init_logging(level=logging.INFO)
@@ -46,16 +46,20 @@ conf = Configuration.from_settings()\
                  address="workload-node1",
                  alias="static-5",
                  user="hvolos01")\
+    .add_machine(roles=["control"],
+                 address="control-node",
+                 alias="static-6",
+                 user="hvolos01")\
     .finalize()
 
 provider = Static(conf)
 
 roles, networks = provider.init()
 
-ibip = Command(cmd = "ip -o -4 address show | grep eth | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles['hydra'])
-ibip.deploy()
-extra_vars = ibip.stdout_to_dict('ibip')
-print(extra_vars)
+# ibip = Command(cmd = "ip -o -4 address show | grep eth | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles['hydra'])
+# ibip.deploy()
+# extra_vars = ibip.stdout_to_dict('ibip')
+
 HYDRA_PATH: str = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 
 def deploy_hydra(roles, extra_vars):
@@ -86,6 +90,14 @@ def deploy_hydra(roles, extra_vars):
 # memcached = Session(Memcached(mem = 256), session = "memcached", nodes = roles['manager'])
 # memcached = Session(Cgroup(Memcached(mem = 256)), session = "memcached", nodes = roles['manager'])
 # memcached.deploy()
-# memcached.destroy()
 
-memcache_perf = MemcachePerf(nodes = roles['workload'])
+# memcached_server = roles["manager"][0].address
+memcached_server = "node0"
+memcache_perf = MemcachePerf(master = roles['control'][0], workers = roles['workload'], threads=40)
+memcache_perf.deploy()
+# memcache_perf.run_bench(server = memcached_server, load=True, records=1000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000, time=10)
+# memcache_perf.run_bench(server = memcached_server, load=False, records=1000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000, time=10)
+# memcache_perf.destroy()
+
+
+# memcached.destroy()
