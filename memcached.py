@@ -4,8 +4,11 @@ import enoslib as en
 
 from enoslib.api import actions
 
+from enoslib.api import bg_start, bg_stop
 
 from enoslib.objects import Host, PathLike, Roles
+
+MCPERF_SESSION = "__enoslib_mcperf__"
 
 class Memcached(en.service.service.Service):
     def __init__(
@@ -102,6 +105,24 @@ class MemcachePerf(en.service.service.Service):
                 cmd = "cd {} && make -j4".format(self.memcache_perf_path), 
             )
 
+    def _run_workers(self):
+        environment: Dict = dict(**self.environment)
+        with actions(
+            pattern_hosts="worker", roles=self.roles, extra_vars=self.extra_vars
+        ) as p:
+            cmd = (
+                f"{self.memcache_perf_path}/mcperf "
+                f"--threads={self.threads} "
+                "--agentmode"
+                # "--agentmode 1> /tmp/out 2>&1 &"
+            )
+            print(bg_start(MCPERF_SESSION, cmd))
+            p.shell(
+                bg_start(MCPERF_SESSION, cmd),
+                environment=environment,
+                task_name=f"Running memcache-perf on agents...",
+            )
+
     def deploy(self):
         """Install and run memcache-perf on the nodes."""
         self._prepare()
@@ -112,24 +133,8 @@ class MemcachePerf(en.service.service.Service):
         with actions(
             pattern_hosts="all", roles=self.roles, extra_vars=self.extra_vars
         ) as p:
-            p.shell("if pgrep mcperf; then pkill mcperf; fi")
-
-    def _run_workers(self):
-        environment: Dict = dict(**self.environment)
-        with actions(
-            pattern_hosts="worker", roles=self.roles, extra_vars=self.extra_vars
-        ) as p:
-            cmd = (
-                f"nohup {self.memcache_perf_path}/mcperf "
-                f"--threads={self.threads} "
-                "--agentmode &"
-                # "--agentmode 1> /tmp/out 2>&1 &"
-            )
-            p.shell(
-                cmd,
-                environment=environment,
-                task_name=f"Running memcache-perf on agents...",
-            )
+            kill_cmd = bg_stop(MCPERF_SESSION)
+            p.shell(kill_cmd)
 
     def run_bench(
         self,

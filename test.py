@@ -39,10 +39,6 @@ conf = Configuration.from_settings()\
                  alias="static-3",
                  user="hvolos01")\
     .add_machine(roles=["workload"],
-                 address="workload-node0",
-                 alias="static-4",
-                 user="hvolos01")\
-    .add_machine(roles=["workload"],
                  address="workload-node1",
                  alias="static-5",
                  user="hvolos01")\
@@ -87,9 +83,9 @@ def deploy_hydra(roles, extra_vars):
 # resilience_manager.deploy()
 # resilience_manager.output()
 
-# memcached = Session(Memcached(mem = 256), session = "memcached", nodes = roles['manager'])
+memcached = Session(Memcached(mem = 256), session = "memcached", nodes = roles['manager'])
 # memcached = Session(Cgroup(Memcached(mem = 256)), session = "memcached", nodes = roles['manager'])
-# memcached.deploy()
+memcached.deploy()
 
 # memcached_server = roles["manager"][0].address
 memcached_server = "node0"
