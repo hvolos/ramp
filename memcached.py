@@ -13,7 +13,7 @@ MCPERF_SESSION = "__enoslib_mcperf__"
 class Memcached(en.service.service.Service):
     def __init__(
         self, 
-        mem: int
+        mem: int = None
     ):
         """Deploy memcached on all hosts.
 
@@ -39,7 +39,10 @@ class Memcached(en.service.service.Service):
         )
         a.shell("cd {} && ./autogen.sh && ./configure && make -j4".format(self.memcached_path), 
                 task_name = "Build memcached")
-        a.shell(f"{self.memcached_path}/memcached -m {self.mem}", task_name = "Run memcached")
+        args = ""
+        if self.mem is not None:
+            args += f"-m {self.mem}"
+        a.shell(f"{self.memcached_path}/memcached {args}", task_name = "Run memcached")
         return a
 
 
@@ -160,9 +163,11 @@ class MemcachePerf(en.service.service.Service):
             f"--blocking --threads {self.threads} -D {self.measure_depth} -C {self.measure_connections} "
             f"{workers_parameter} "
             f"-c {self.connections} "
-            f"-r {records} -q {qps} -t {time} "
+            f"-r {records} "
             f"--iadist={iadist} --keysize={keysize} --valuesize={valuesize}"
         )
+        if not load:
+            cmd += f" -q {qps} -t {time}"
         print(cmd)
         with actions(
             pattern_hosts="master", roles=self.roles, extra_vars=self.extra_vars

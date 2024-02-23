@@ -1,5 +1,6 @@
 import logging
 import signal
+import os
 
 from typing import List, Dict, Iterable, Optional
 
@@ -17,7 +18,7 @@ class Command:
     def __init__(
         self, 
         cmd: str,
-        nodes: Iterable[Host],
+        nodes: Iterable[Host] = None,
         task_name: str = None,
         remote_working_dir: str = None,
         sudo: bool = False, 
@@ -57,6 +58,13 @@ class Command:
         ) as p:
             self.results = p.results
 
+    def output(self):
+        task_filter = self.task_name if self.task_name else 'shell'
+        for result in self.results.filter(task=task_filter):
+            host = result.host
+            for line in result.payload['stdout_lines']:
+                rprint(f"[red]{host}[/red]\t{line}")
+        
     def stdout_to_dict(self, var):
         """Returns a dictionary that contains a variable assigned with the standard output of the command
 
@@ -102,6 +110,7 @@ class Cgroup:
     def __init__(
         self,
         child: str,
+        mem_limit_in_bytes: int = 256*1024*1024
     ):
         """Run a command in a control group
 
@@ -109,8 +118,9 @@ class Cgroup:
             child: the command to run in a control group
         """
         self.child = child
-        self.memory_cgroup = _MemoryCgroup(cgroup_path = "memctl", limit_in_bytes = 256*1024*1024)
+        self.memory_cgroup = _MemoryCgroup(cgroup_path = "memctl", limit_in_bytes = mem_limit_in_bytes)
 
+    @staticmethod
     def _cgexec(cgroup_controller_path_pairs: List[str], cmd: str) -> str:
         """Run a command in a given control group
 
@@ -150,7 +160,7 @@ class Cgroup:
 
         last_child_cmd = last_child_action['shell']
         child_actions.shell(
-            self._cgexec(cgroup_controller_path_pairs, f"{last_child_cmd}"),
+            Cgroup._cgexec(cgroup_controller_path_pairs, f"{last_child_cmd}"),
             task_name=f"Running {last_child_cmd} in a cgroup",
         )
 
