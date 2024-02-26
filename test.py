@@ -39,6 +39,10 @@ conf = Configuration.from_settings()\
                  alias="static-3",
                  user="hvolos01")\
     .add_machine(roles=["workload"],
+                 address="workload-node0",
+                 alias="static-4",
+                 user="hvolos01")\
+    .add_machine(roles=["workload"],
                  address="workload-node1",
                  alias="static-5",
                  user="hvolos01")\
@@ -83,16 +87,16 @@ def deploy_hydra(roles):
 
 deploy_hydra(roles)
 
-memcached = Session(Cgroup(Memcached(), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
-memcached.destroy()
-memcached.deploy()
+# memcached = Session(Cgroup(Memcached(), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
+# memcached.destroy()
+# memcached.deploy()
 
 memcached_server = roles["manager"][0].address
 memcache_perf = MemcachePerf(master = roles['control'][0], workers = roles['workload'], threads=40, connections=4)
 memcache_perf.deploy()
-# memcache_perf.run_bench(server = memcached_server, load=True, records=10000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000, time=10)
-# memcache_perf.run_bench(server = memcached_server, load=False, records=10000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000, time=10)
+memcache_perf.run_bench(server = memcached_server, load=True, records=10000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000, time=30)
+memcache_perf.run_bench(server = memcached_server, load=False, records=10000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000, time=30)
 memcache_perf.destroy()
 
 
-memcached.destroy()
+#memcached.destroy()

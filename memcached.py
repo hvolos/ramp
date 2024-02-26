@@ -81,7 +81,8 @@ class MemcachePerf(en.service.service.Service):
 
         self.memcache_perf_path = "~/memcache-perf"
         self.repo = "https://github.com/shaygalon/memcache-perf.git"
-        self.version = "4be8194"
+        # self.version = "4be8194"
+        self.version = "5e195b300db895550b2bc1a143c21e3210ddddc6"
 
     def _prepare(self):
         """Installs the memcache perf dependencies."""
