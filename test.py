@@ -85,18 +85,20 @@ def deploy_hydra(roles):
     resilience_manager.deploy()
     resilience_manager.output()
 
-deploy_hydra(roles)
+# deploy_hydra(roles)
 
-# memcached = Session(Cgroup(Memcached(), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
+memcached = Session(Cgroup(Memcached(mem = 1024), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
+# memcached = Session(Memcached(mem = 1024), session = "memcached", nodes = roles['manager'])
 # memcached.destroy()
-# memcached.deploy()
+memcached.deploy()
 
 memcached_server = roles["manager"][0].address
-memcache_perf = MemcachePerf(master = roles['control'][0], workers = roles['workload'], threads=40, connections=4)
-memcache_perf.deploy()
-memcache_perf.run_bench(server = memcached_server, load=True, records=10000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000, time=30)
-memcache_perf.run_bench(server = memcached_server, load=False, records=10000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000, time=30)
+memcache_perf = MemcachePerf(master = roles['control'][0], workers = roles['workload'], threads=10, connections=1, measure_depth=1, measure_connections=1)
 memcache_perf.destroy()
+memcache_perf.deploy()
+# memcache_perf.run_bench(server = memcached_server, load=True, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value")
+memcache_perf.run_bench(server = memcached_server, load=False, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000000, time=120)
+# memcache_perf.destroy()
 
 
 #memcached.destroy()

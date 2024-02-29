@@ -81,8 +81,8 @@ class MemcachePerf(en.service.service.Service):
 
         self.memcache_perf_path = "~/memcache-perf"
         self.repo = "https://github.com/shaygalon/memcache-perf.git"
-        # self.version = "4be8194"
-        self.version = "5e195b300db895550b2bc1a143c21e3210ddddc6"
+        self.version = "4be8194"
+        # self.version = "5e195b300db895550b2bc1a143c21e3210ddddc6"
 
     def _prepare(self):
         """Installs the memcache perf dependencies."""
@@ -149,8 +149,8 @@ class MemcachePerf(en.service.service.Service):
         iadist: str,
         keysize: str,
         valuesize: str, 
-        qps: int, 
-        time: int
+        qps: int = None, 
+        time: int = None
     ):
         workers = self.roles["worker"]
         workers_list = ["-a " + w.address for w in workers]
@@ -161,14 +161,16 @@ class MemcachePerf(en.service.service.Service):
             f"{self.memcache_perf_path}/mcperf "
             f"-s {server} "
             f"{load_flag} "
-            f"--blocking --threads {self.threads} -D {self.measure_depth} -C {self.measure_connections} "
-            f"{workers_parameter} "
-            f"-c {self.connections} "
             f"-r {records} "
             f"--iadist={iadist} --keysize={keysize} --valuesize={valuesize}"
         )
         if not load:
+            cmd += f" --blocking --threads {self.threads} -D {self.measure_depth} -C {self.measure_connections}"
+            cmd += f" {workers_parameter}"
+            cmd += f" -c {self.connections}"
+            cmd += f" --keyorder=uniform:{records} --keycache_capacity={records} --keycache_reuse=1 --keycache_regen=100"
             cmd += f" -q {qps} -t {time}"
+
         print(cmd)
         with actions(
             pattern_hosts="master", roles=self.roles, extra_vars=self.extra_vars
