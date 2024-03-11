@@ -85,19 +85,39 @@ def deploy_hydra(roles):
     resilience_manager.deploy()
     resilience_manager.output()
 
-# deploy_hydra(roles)
+def destroy_hydra(roles):
+    """Deploy Hydra"""
+    # get infiniband IP address for each hydra server
+    ibip = Command(cmd = "ip -o -4 address show | grep eth | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles['hydra'])
+    ibip.deploy()
+    extra_vars = ibip.stdout_to_dict('ibip')
 
-memcached = Session(Cgroup(Memcached(mem = 1024), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
+    # install hydra
+    extra_vars.update({
+        "enos_action": "destroy",
+        "hydra_home": HYDRA_PATH,
+    })
+    _playbook = os.path.join(HYDRA_PATH, "ansible", "hydra.yml")
+    r = run_ansible([_playbook], roles=roles, extra_vars=extra_vars)
+
+    # destroy resource monitor
+    cmd = f"{HYDRA_PATH}/resource_monitor/resource_monitor {{{{ hostvars[inventory_hostname]['ibip'][inventory_hostname] }}}} 9400"
+    resource_monitor = Session(Command(cmd), session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
+    resource_monitor.destroy()
+
+destroy_hydra(roles)
+
+#memcached = Session(Cgroup(Memcached(mem = 1024), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
 # memcached = Session(Memcached(mem = 1024), session = "memcached", nodes = roles['manager'])
 # memcached.destroy()
-memcached.deploy()
+#memcached.deploy()
 
-memcached_server = roles["manager"][0].address
-memcache_perf = MemcachePerf(master = roles['control'][0], workers = roles['workload'], threads=10, connections=1, measure_depth=1, measure_connections=1)
-memcache_perf.destroy()
-memcache_perf.deploy()
-# memcache_perf.run_bench(server = memcached_server, load=True, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value")
-memcache_perf.run_bench(server = memcached_server, load=False, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000000, time=120)
+#memcached_server = roles["manager"][0].address
+#memcache_perf = MemcachePerf(master = roles['control'][0], workers = roles['workload'], threads=10, connections=1, measure_depth=1, measure_connections=1)
+#memcache_perf.destroy()
+#memcache_perf.deploy()
+## memcache_perf.run_bench(server = memcached_server, load=True, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value")
+#memcache_perf.run_bench(server = memcached_server, load=False, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000000, time=120)
 # memcache_perf.destroy()
 
 
