@@ -42,6 +42,7 @@
 #include "infiniswap.h"
 #include <linux/bio.h>
 
+
 void print_buffer(char* tag, char* buf, int len) {
 	int i,j;
 	printk("%s buf: %p len: %lu\n", tag, buf, len);
@@ -525,6 +526,7 @@ static int IS_send_query(struct kernel_cb *cb)
 
 	return 0;
 }
+
 static int IS_send_bind_single(struct kernel_cb *cb, int select_chunk)
 {
 	int ret = 0;
@@ -540,6 +542,22 @@ static int IS_send_bind_single(struct kernel_cb *cb, int select_chunk)
 	rdma_cq_event_handler(cb->cq, cb);
 
 	return 0;	
+}
+
+static int IS_send_fault(struct kernel_cb *cb)
+{
+	int ret = 0;
+	struct ib_send_wr * bad_wr;
+
+	cb->send_buf.type = FAULT;
+	ret = ib_post_send(cb->qp, &cb->sq_wr, &bad_wr);
+	if (ret) {
+		printk(KERN_ERR PFX "FAULT MSG send error %d\n", ret);
+		return ret;
+	}
+	rdma_cq_event_handler(cb->cq, cb);
+
+	return 0;
 }
 
 static int IS_send_done(struct kernel_cb *cb, int num)

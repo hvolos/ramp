@@ -1,4 +1,5 @@
 import os
+import sys
 import logging
 from typing import Dict, Iterable, Optional
 
@@ -16,45 +17,6 @@ from memcached import Memcached, MemcachePerf
 from command import Command, Cgroup, Session
 
 en.init_logging(level=logging.INFO)
-
-# path to the inventory
-inventory = os.path.join(os.getcwd(), "hosts")
-
-# claim the resources
-conf = Configuration.from_settings()\
-    .add_machine(roles=["hydra", "manager"],
-                 address="node0",
-                 alias="static-0",
-                 user="hvolos01")\
-    .add_machine(roles=["hydra", "monitor"],
-                 address="node1",
-                 alias="static-1",
-                 user="hvolos01")\
-    .add_machine(roles=["hydra", "monitor"],
-                 address="node2",
-                 alias="static-2",
-                 user="hvolos01")\
-    .add_machine(roles=["hydra", "monitor"],
-                 address="node3",
-                 alias="static-3",
-                 user="hvolos01")\
-    .add_machine(roles=["workload"],
-                 address="workload-node0",
-                 alias="static-4",
-                 user="hvolos01")\
-    .add_machine(roles=["workload"],
-                 address="workload-node1",
-                 alias="static-5",
-                 user="hvolos01")\
-    .add_machine(roles=["control"],
-                 address="control-node",
-                 alias="static-6",
-                 user="hvolos01")\
-    .finalize()
-
-provider = Static(conf)
-
-roles, networks = provider.init()
 
 HYDRA_PATH: str = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 
@@ -80,10 +42,10 @@ def deploy_hydra(roles):
     resource_monitor.output()
 
     # deploy resilience manager
-    cmd = f"{HYDRA_PATH}/setup/resilience_manager_setup.sh"
-    resilience_manager = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True, extra_vars = extra_vars)
-    resilience_manager.deploy()
-    resilience_manager.output()
+    # cmd = f"{HYDRA_PATH}/setup/resilience_manager_setup.sh"
+    # resilience_manager = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True, extra_vars = extra_vars)
+    # resilience_manager.deploy()
+    # resilience_manager.output()
 
 def destroy_hydra(roles):
     """Deploy Hydra"""
@@ -105,8 +67,6 @@ def destroy_hydra(roles):
     resource_monitor = Session(Command(cmd), session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
     resource_monitor.destroy()
 
-destroy_hydra(roles)
-
 #memcached = Session(Cgroup(Memcached(mem = 1024), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
 # memcached = Session(Memcached(mem = 1024), session = "memcached", nodes = roles['manager'])
 # memcached.destroy()
@@ -122,3 +82,52 @@ destroy_hydra(roles)
 
 
 #memcached.destroy()
+
+def main(argv):
+    # path to the inventory
+    inventory = os.path.join(os.getcwd(), "hosts")
+
+    # claim the resources
+    conf = Configuration.from_settings()\
+        .add_machine(roles=["hydra", "manager"],
+                    address="node0",
+                    alias="static-0",
+                    user="hvolos01")\
+        .add_machine(roles=["hydra", "monitor"],
+                    address="node1",
+                    alias="static-1",
+                    user="hvolos01")\
+        .add_machine(roles=["hydra", "monitor"],
+                    address="node2",
+                    alias="static-2",
+                    user="hvolos01")\
+        .add_machine(roles=["hydra", "monitor"],
+                    address="node3",
+                    alias="static-3",
+                    user="hvolos01")\
+        .add_machine(roles=["workload"],
+                    address="workload-node0",
+                    alias="static-4",
+                    user="hvolos01")\
+        .add_machine(roles=["workload"],
+                    address="workload-node1",
+                    alias="static-5",
+                    user="hvolos01")\
+        .add_machine(roles=["control"],
+                    address="control-node",
+                    alias="static-6",
+                    user="hvolos01")\
+        .finalize()
+
+    provider = Static(conf)
+
+    roles, networks = provider.init()
+
+    if argv[1] == "deploy":
+        deploy_hydra(roles)
+
+    if argv[1] == "destroy":
+        destroy_hydra(roles)
+
+if __name__ == "__main__":
+    main(sys.argv)

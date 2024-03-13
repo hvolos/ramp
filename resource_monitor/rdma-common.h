@@ -64,7 +64,8 @@ struct message {
     STOP, //S
     BIND, //C
     BIND_SINGLE,
-    QUERY //C
+    QUERY, //C
+    FAULT
   } type;
 };
 

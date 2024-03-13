@@ -154,7 +154,8 @@ struct IS_rdma_info {
 		STOP,
 		BIND,
 		BIND_SINGLE,
-		QUERY
+		QUERY,
+		FAULT
 	} type;
 };
 
