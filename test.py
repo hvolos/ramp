@@ -62,6 +62,12 @@ def destroy_hydra(roles):
     _playbook = os.path.join(HYDRA_PATH, "ansible", "hydra.yml")
     r = run_ansible([_playbook], roles=roles, extra_vars=extra_vars)
 
+    # destroy resilience manager
+    cmd = f"{HYDRA_PATH}/setup/resilience_manager_teardown.sh"
+    resilience_manager = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True, extra_vars = extra_vars)
+    resilience_manager.deploy()
+    resilience_manager.output()
+
     # destroy resource monitor
     cmd = f"{HYDRA_PATH}/resource_monitor/resource_monitor {{{{ hostvars[inventory_hostname]['ibip'][inventory_hostname] }}}} 9400"
     resource_monitor = Session(Command(cmd), session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)

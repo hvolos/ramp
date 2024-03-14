@@ -155,7 +155,8 @@ struct IS_rdma_info {
 		BIND,
 		BIND_SINGLE,
 		QUERY,
-		FAULT
+		FAULT,
+		FAULT_DONE
 	} type;
 };
 
@@ -171,6 +172,7 @@ enum test_state {
 	WAIT_OPS,
 	RECV_STOP,
 	RECV_EVICT,
+	RECV_FAULT_DONE,
 	RDMA_WRITE_RUNNING,
 	RDMA_READ_RUNNING,
 	SEND_DONE,
@@ -517,4 +519,4 @@ struct IS_session *IS_session_find_by_portal(struct list_head *s_data_list,
 						 const char *portal);
 const char* IS_device_state_str(struct IS_file *dev);
 int IS_set_device_state(struct IS_file *dev, enum IS_dev_state state);
-
+void IS_inject_fault(struct IS_session *IS_session);

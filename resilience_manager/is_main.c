@@ -549,6 +549,8 @@ static int IS_send_fault(struct kernel_cb *cb)
 	int ret = 0;
 	struct ib_send_wr * bad_wr;
 
+	pr_info("%s\n", __func__);
+
 	cb->send_buf.type = FAULT;
 	ret = ib_post_send(cb->qp, &cb->sq_wr, &bad_wr);
 	if (ret) {
@@ -637,6 +639,19 @@ struct IS_session *IS_session_find_by_portal(struct list_head *s_data_list,
 	mutex_unlock(&g_lock);
 
 	return ret;
+}
+
+void IS_inject_fault(struct IS_session *IS_session)
+{
+	struct kernel_cb *tmp_cb;
+	tmp_cb = IS_session->cb_list[0];
+
+	pr_info("%s\n", __func__);
+
+	if (IS_session->cb_state_list[0] > CB_IDLE) {
+		IS_send_fault(tmp_cb);
+		rdma_cq_event_handler(tmp_cb->cq, tmp_cb);
+	}
 }
 
 static int IS_disconnect_handler(struct kernel_cb *cb)
@@ -1034,6 +1049,10 @@ static int client_recv(struct kernel_cb *cb, struct ib_wc *wc)
 	//		printk("STOP\n");	
 			cb->state = RECV_STOP;	
 			client_recv_stop(cb);
+			break;
+		case FAULT_DONE:
+	//		printk("FAULT DONE\n");	
+			cb->state = RECV_FAULT_DONE;	
 			break;
 		default:
 			pr_info(PFX "client receives unknown msg\n");

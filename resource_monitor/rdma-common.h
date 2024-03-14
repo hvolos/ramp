@@ -65,7 +65,8 @@ struct message {
     BIND, //C
     BIND_SINGLE,
     QUERY, //C
-    FAULT
+    FAULT,
+    FAULT_DONE
   } type;
 };
 
@@ -180,6 +181,7 @@ void send_single_mr(void *context, int n);
 void send_mr(void *context, int n);
 void send_stop(void *context, int n);
 void send_evict(void *context, int n);
+void send_fault_done(void *context);
 void send_free_mem_size(void *context);
 void* free_mem(void *data);
 
