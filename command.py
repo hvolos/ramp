@@ -102,7 +102,9 @@ class _MemoryCgroup:
             become="yes", become_user="root"
         )
         a.shell(
-            f"echo {self.limit_in_bytes} > {self.parameter_path('memory.limit_in_bytes')}"
+            f"echo {self.limit_in_bytes} > {self.parameter_path('memory.limit_in_bytes')}",
+            task_name=f"Applying memory limit to cgroup {self.controller_path_pair()}",
+            become="yes", become_user="root"
         )
 
 

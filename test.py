@@ -42,10 +42,10 @@ def deploy_hydra(roles):
     resource_monitor.output()
 
     # deploy resilience manager
-    # cmd = f"{HYDRA_PATH}/setup/resilience_manager_setup.sh"
-    # resilience_manager = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True, extra_vars = extra_vars)
-    # resilience_manager.deploy()
-    # resilience_manager.output()
+    cmd = f"{HYDRA_PATH}/setup/resilience_manager_setup.sh"
+    resilience_manager = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True, extra_vars = extra_vars)
+    resilience_manager.deploy()
+    resilience_manager.output()
 
 def destroy_hydra(roles):
     """Deploy Hydra"""
@@ -73,21 +73,29 @@ def destroy_hydra(roles):
     resource_monitor = Session(Command(cmd), session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
     resource_monitor.destroy()
 
-#memcached = Session(Cgroup(Memcached(mem = 1024), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
-# memcached = Session(Memcached(mem = 1024), session = "memcached", nodes = roles['manager'])
-# memcached.destroy()
-#memcached.deploy()
+def deploy_memcached(roles, cgroup = True):
+    if cgroup:
+        memcached = Session(Cgroup(Memcached(mem = 1024), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
+    else:
+        memcached = Session(Memcached(mem = 1024), session = "memcached", nodes = roles['manager'])
+    memcached.deploy()
+    memcached.output()
 
-#memcached_server = roles["manager"][0].address
-#memcache_perf = MemcachePerf(master = roles['control'][0], workers = roles['workload'], threads=10, connections=1, measure_depth=1, measure_connections=1)
-#memcache_perf.destroy()
-#memcache_perf.deploy()
-## memcache_perf.run_bench(server = memcached_server, load=True, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value")
-#memcache_perf.run_bench(server = memcached_server, load=False, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000000, time=120)
-# memcache_perf.destroy()
+def destroy_memcached(roles, cgroup = True):
+    if cgroup:
+        memcached = Session(Cgroup(Memcached(mem = 1024), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
+    else:
+        memcached = Session(Memcached(mem = 1024), session = "memcached", nodes = roles['manager'])
+    memcached.destroy()
 
-
-#memcached.destroy()
+def run_bench(roles):
+    memcached_server = roles["manager"][0].address
+    memcache_perf = MemcachePerf(master = roles['control'][0], workers = roles['workload'], threads=10, connections=1, measure_depth=1, measure_connections=1)
+    memcache_perf.destroy()
+    memcache_perf.deploy()
+    memcache_perf.run_bench(server = memcached_server, load=True, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value")
+    memcache_perf.run_bench(server = memcached_server, load=False, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000000, time=30)
+    memcache_perf.destroy()
 
 def main(argv):
     # path to the inventory
@@ -134,6 +142,15 @@ def main(argv):
 
     if argv[1] == "destroy":
         destroy_hydra(roles)
+
+    if argv[1] == "deploy_memcached":
+        deploy_memcached(roles)
+
+    if argv[1] == "destroy_memcached":
+        destroy_memcached(roles)
+
+    if argv[1] == "run_bench":
+        run_bench(roles)
 
 if __name__ == "__main__":
     main(sys.argv)
