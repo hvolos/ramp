@@ -273,12 +273,12 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 		ctx[i]->rdma_sq_wr.rkey = chunk[i]->remote_rkey;
 		ctx[i]->rdma_sq_wr.remote_addr = chunk[i]->remote_addr + (offset/NDATAS);
 		ctx[i]->rdma_sq_wr.wr.opcode = IB_WR_RDMA_READ;
- #else
+#else
 		ctx[i]->rdma_sq_wr.sg_list->length = (len/NDATAS);
 		ctx[i]->rdma_sq_wr.wr.rdma.rkey = chunk[i]->remote_rkey;
 		ctx[i]->rdma_sq_wr.wr.rdma.remote_addr = chunk[i]->remote_addr + (offset/NDATAS);
 		ctx[i]->rdma_sq_wr.opcode = IB_WR_RDMA_READ;
- #endif
+#endif
 
 		ctx[i]->index = i;
 		ctx[i]->cnt = count;
@@ -334,32 +334,32 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 
 int IS_rdma_write(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_index, int *chunk_index, struct remote_chunk_g **chunk, unsigned long offset, unsigned long len, struct request *req, struct IS_queue *q)
 {
-        int ret;
-        struct ib_send_wr *bad_wr;
-        struct rdma_ctx *ctx[NDISKS];
+	int ret;
+	struct ib_send_wr *bad_wr;
+	struct rdma_ctx *ctx[NDISKS];
 	int i;
 	unsigned char *ptrs[NDISKS];
 	struct bio *bio =  req->bio;
 
-//      printk("write [%x] len [%x]", offset, len  );
+	// printk("write [%x] len [%x]", offset, len  );
 
 	atomic_t* count = kzalloc(sizeof(atomic_t), GFP_KERNEL);
 	atomic_set(count, NDATAS);
 
 	for (i=0; i<NDISKS; i++){ // we need to get all the ctxs // write needs to be suspended until new chunk found
         /* distribute based on request address for load balancing*/
- 	int conn_id = (uint64_t)( bio_data(req->bio)   ) & QUEUE_NUM_MASK;
+		int conn_id = (uint64_t)( bio_data(req->bio)   ) & QUEUE_NUM_MASK;
 
         IS_conn = IS_conn->IS_sess->IS_conns[conn_id];
 
-	if (cb_index[i] == NO_CB_MAPPED){
-	ctx[i] = IS_get_ctx(IS_conn->ctx_pools[i]);
-	ptrs[i] = ctx[i]->rdma_buf;
-	continue;
-	}
+		if (cb_index[i] == NO_CB_MAPPED){
+			ctx[i] = IS_get_ctx(IS_conn->ctx_pools[i]);
+			ptrs[i] = ctx[i]->rdma_buf;
+			continue;
+		}
 	
         ctx[i] = IS_get_ctx(IS_conn->ctx_pools[ cb_index[i] ]); 
-	BUG_ON(!ctx[i]);
+		BUG_ON(!ctx[i]);
 
         ctx[i]->req = req;
         ctx[i]->cb = cb[i];
@@ -368,7 +368,7 @@ int IS_rdma_write(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_
         ctx[i]->chunk_ptr = chunk[i];
         ctx[i]->chunk_index = chunk_index[i];
 
-	ptrs[i] = ctx[i]->rdma_buf;
+		ptrs[i] = ctx[i]->rdma_buf;
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
         ctx[i]->rdma_sq_wr.wr.sg_list->length = (len/NDATAS);
@@ -382,19 +382,18 @@ int IS_rdma_write(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_
         ctx[i]->rdma_sq_wr.opcode = IB_WR_RDMA_WRITE;
 
 #endif
-	ctx[i]->index = i;
-	ctx[i]->cnt = count;
+		ctx[i]->index = i;
+		ctx[i]->cnt = count;
 	}
 
 #ifdef REP
-        u32  bio_offset= 0;
+	u32  bio_offset= 0;
 	for (bio_offset=0; bio; bio = bio->bi_next, bio_offset+=IS_PAGE_SIZE){
 	for (i=0; i< NDISKS; i++){
-
         memcpy(ctx[i]->rdma_buf + bio_offset,
 	       bio_data(bio),
 	       IS_PAGE_SIZE );
-	}
+		}
 	}
 #endif
 
@@ -410,29 +409,27 @@ int IS_rdma_write(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_
         u32  bio_offset= 0;
 
         bio_for_each_segment(bvl, bio, iter){
-        BUG_ON(bvl.bv_len!= IS_PAGE_SIZE); //each bvec is page
-        for(i=0; i<NDATAS; i++){
-        memcpy( ctx[i]->rdma_buf + bio_offset/NDATAS,
-		page_address(bvl.bv_page) + i*IS_PAGE_SIZE/NDATAS,
-                IS_PAGE_SIZE/NDATAS);
+			BUG_ON(bvl.bv_len!= IS_PAGE_SIZE); //each bvec is page
+			for(i=0; i<NDATAS; i++){
+				memcpy( ctx[i]->rdma_buf + bio_offset/NDATAS,
+				page_address(bvl.bv_page) + i*IS_PAGE_SIZE/NDATAS,
+						IS_PAGE_SIZE/NDATAS);
+			}
+			bio_offset += IS_PAGE_SIZE;
         }
-        bio_offset += IS_PAGE_SIZE;
-        }
-        }
+    }
 	else
 #endif
 	{
-	u32  bio_offset;	
-	for (bio_offset=0; bio; bio = bio->bi_next, bio_offset+=IS_PAGE_SIZE){
-//	BUG_ON(bio_multiple_segments(bio)); 
-	for (i=0; i<NDATAS; i++){
-
-	memcpy( ctx[i]->rdma_buf + bio_offset/NDATAS,
-	        bio_data(bio) + i*IS_PAGE_SIZE/NDATAS , 
-	        IS_PAGE_SIZE/NDATAS );
-
-	}
-	}
+		u32  bio_offset;	
+		for (bio_offset=0; bio; bio = bio->bi_next, bio_offset+=IS_PAGE_SIZE){
+			// BUG_ON(bio_multiple_segments(bio)); 
+			for (i=0; i<NDATAS; i++){
+				memcpy( ctx[i]->rdma_buf + bio_offset/NDATAS,
+						bio_data(bio) + i*IS_PAGE_SIZE/NDATAS , 
+						IS_PAGE_SIZE/NDATAS );
+			}
+		}
 	}
 
 	kernel_fpu_begin();
@@ -442,13 +439,13 @@ int IS_rdma_write(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_
 
 
 	for (i=0; i<NDATAS; i++){
-	if(cb_index[i] == NO_CB_MAPPED)
-		continue;		
-	//printk("client post write cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
+		if(cb_index[i] == NO_CB_MAPPED)
+			continue;		
+		// printk("client post write cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
         ret = ib_post_send(cb[i]->qp, (struct ib_send_wr *) &ctx[i]->rdma_sq_wr, &bad_wr);
         if (ret) {
-                printk(KERN_ALERT PFX "client post write %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
-                return ret;
+			printk(KERN_ALERT PFX "client post write %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
+			return ret;
         }
 	}
 
@@ -466,15 +463,15 @@ int IS_rdma_write(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_
 	}
 
 	for (i=0; i<NDISKS; i++){
-	if(cb_index[i] == NO_CB_MAPPED){
-		IS_insert_ctx( ctx[i] );			
-		continue;
-	}
-	//printk("waiting for write cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
+		if(cb_index[i] == NO_CB_MAPPED){
+			IS_insert_ctx( ctx[i] );			
+			continue;
+		}
+		// printk("waiting for write cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
         rdma_cq_event_handler(cb[i]->cq, cb[i]);
 	}
 
-        return 0;
+    return 0;
 }
 
 static int IS_send_activity(struct kernel_cb *cb)
