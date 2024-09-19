@@ -394,6 +394,10 @@ struct IS_session {
 	unsigned long int *read_request_count;	//how many requests on each CPU
 	unsigned long int *write_request_count;	//how many requests on each CPU
 
+	// fault injection
+	unsigned long int inject_fault; // whether to inject fault
+	unsigned long int inject_fault_count; // how many faults injected
+
 	//struct kernel_cb 		*cb;	// binding with kernel RDMA
 	int mapped_cb_num;	//How many cbs are remote mapped
 	struct kernel_cb	**cb_list;	
@@ -519,4 +523,6 @@ struct IS_session *IS_session_find_by_portal(struct list_head *s_data_list,
 						 const char *portal);
 const char* IS_device_state_str(struct IS_file *dev);
 int IS_set_device_state(struct IS_file *dev, enum IS_dev_state state);
-void IS_inject_fault(struct IS_session *IS_session);
+void IS_inject_fault_enable(struct IS_session *IS_session, unsigned int enable);
+unsigned int IS_inject_fault_count(struct IS_session *IS_session);
+void IS_inject_fault_distr(struct IS_session *IS_session, const char* distr);

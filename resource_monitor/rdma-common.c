@@ -552,7 +552,6 @@ void on_completion(struct ibv_wc *wc)
       case FAULT:
         printf("%s, FAULT \n", __func__);
         atomic_set(&conn->cq_qp_state, CQ_QP_BUSY);
-        send_fault_done(conn);
         post_receives(conn);
         break;
       case DONE:
@@ -740,14 +739,6 @@ void send_evict(void *context, int n)
   for (i=0; i<MAX_MR_SIZE_GB; i++){
     conn->send_msg->rkey[i] = 0;
   }
-  send_message(conn);
-}
-
-void send_fault_done(void *context)
-{
-  struct connection *conn = (struct connection *)context;
-  printf("%s, FAULT DONE in conn%d\n", __func__, conn->conn_index);
-  conn->send_msg->type = FAULT_DONE;
   send_message(conn);
 }
 

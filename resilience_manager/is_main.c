@@ -167,6 +167,7 @@ void show_rdma_info(struct IS_rdma_info * info){
 
 
 static void rdma_cq_event_handler(struct ib_cq * cq, struct kernel_cb *cb);
+static int IS_send_fault(struct kernel_cb *cb);
 
 
 inline int IS_set_device_state(struct IS_file *xdev,
@@ -309,8 +310,11 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 			}
 		}
 		else{
+			if (IS_conn->IS_sess->inject_fault){
+				IS_send_fault(cb[i]);
+			}
 			ret = ib_post_send(cb[i]->qp, (struct ib_send_wr *) &ctx[i]->rdma_sq_wr, &bad_wr); //not returning error
-			//printk("client post read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
+			// printk("client post read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
 			if (ret){
 				printk(KERN_ALERT PFX "client post read %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
 				return ret;
@@ -323,6 +327,7 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 			continue;
 		// printk("waiting for read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
 		rdma_cq_event_handler(cb[i]->cq, cb[i]);
+		// printk("waiting for read cb: %d offset:%lu len: %lu: DONE\n", cb_index[i], offset/NDATAS, len/NDATAS );
 		// print_buffer("IS_rdma_read",
 		// 				ctx[i]->rdma_buf,
 		// 				ctx[i]->len);
@@ -632,18 +637,20 @@ struct IS_session *IS_session_find_by_portal(struct list_head *s_data_list,
 	return ret;
 }
 
-void IS_inject_fault(struct IS_session *IS_session)
+void IS_inject_fault_enable(struct IS_session *IS_session, unsigned int enable)
 {
-	struct kernel_cb *tmp_cb;
-	tmp_cb = IS_session->cb_list[0];
-
-	pr_info("%s\n", __func__);
-
-	if (IS_session->cb_state_list[0] > CB_IDLE) {
-		IS_send_fault(tmp_cb);
-		rdma_cq_event_handler(tmp_cb->cq, tmp_cb);
-	}
+	IS_session->inject_fault = enable;
 }
+
+unsigned int IS_inject_fault_count(struct IS_session *IS_session)
+{
+	return IS_session->inject_fault_count;
+}
+
+void IS_inject_fault_config_distr(struct IS_session *IS_session, const char* key, const char* val)
+{
+}
+
 
 static int IS_disconnect_handler(struct kernel_cb *cb)
 {
@@ -1008,8 +1015,8 @@ static int client_recv(struct kernel_cb *cb, struct ib_wc *wc)
 		return -1;
 	}
 
-	//DEBUG
-	//show_rdma_info(&cb->recv_buf);
+	// DEBUG
+	// show_rdma_info(&cb->recv_buf);
 
 	
 	switch(cb->recv_buf.type){
@@ -1040,10 +1047,6 @@ static int client_recv(struct kernel_cb *cb, struct ib_wc *wc)
 	//		printk("STOP\n");	
 			cb->state = RECV_STOP;	
 			client_recv_stop(cb);
-			break;
-		case FAULT_DONE:
-	//		printk("FAULT DONE\n");	
-			cb->state = RECV_FAULT_DONE;	
 			break;
 		default:
 			pr_info(PFX "client receives unknown msg\n");
@@ -2053,16 +2056,16 @@ int IS_single_chunk_map(struct IS_session *IS_session, int select_chunk)
 
 	/*sort free memory received from servers*/
 	for (i=0; i<NDISKS; i++){
-	for (j=i+1; j<k; j++) {
-		if (free_mem[i] < free_mem[j]) {
-			free_mem[i] += free_mem[j];	
-			free_mem[j] = free_mem[i] - free_mem[j];
-			free_mem[i] = free_mem[i] - free_mem[j];
-			free_mem_sorted[i] += free_mem_sorted[j];	
-			free_mem_sorted[j] = free_mem_sorted[i] - free_mem_sorted[j];
-			free_mem_sorted[i] = free_mem_sorted[i] - free_mem_sorted[j];
+		for (j=i+1; j<k; j++) {
+			if (free_mem[i] < free_mem[j]) {
+				free_mem[i] += free_mem[j];	
+				free_mem[j] = free_mem[i] - free_mem[j];
+				free_mem[i] = free_mem[i] - free_mem[j];
+				free_mem_sorted[i] += free_mem_sorted[j];	
+				free_mem_sorted[j] = free_mem_sorted[i] - free_mem_sorted[j];
+				free_mem_sorted[i] = free_mem_sorted[i] - free_mem_sorted[j];
+			}
 		}
-	}
 	}
 
 	if (free_mem[NDISKS-1] == 0){
@@ -2125,7 +2128,7 @@ int IS_session_create(const char *portal, struct IS_session *IS_session)
 		IS_session->chunk_map_cb_chunk[i] = -1;
 	}
 
-	//IS-connection
+	// IS-connection
 	IS_session->IS_conns = (struct IS_connection **)kzalloc(submit_queues * sizeof(*IS_session->IS_conns), GFP_KERNEL);
 	if (!IS_session->IS_conns) {
 		pr_err("failed to allocate IS connections array\n");
@@ -2138,6 +2141,10 @@ int IS_session_create(const char *portal, struct IS_session *IS_session)
 			goto err_destroy_conns;
 	}
 
+	// Fault injection
+	IS_session->inject_fault = 0;
+	IS_session->inject_fault_count = 0;
+
 	return 0;
 
 err_destroy_conns:
@@ -2146,6 +2153,7 @@ err_destroy_conns:
 		IS_session->IS_conns[j] = NULL;
 	}
 	kfree(IS_session->IS_conns);
+
 err_destroy_portal:
 
 	return ret;
@@ -2158,9 +2166,9 @@ void IS_session_destroy(struct IS_session *IS_session)
 	
 	/*destroy connection*/
 	for (i = 0; i < IS_session->cb_num; i++) {
-                IS_destroy_conn(IS_session->IS_conns[i]);
-                IS_session->IS_conns[i] = NULL;
-        }	
+		IS_destroy_conn(IS_session->IS_conns[i]);
+		IS_session->IS_conns[i] = NULL;
+	}	
 	kfree(IS_session->IS_conns);
 
 	mutex_lock(&g_lock);
