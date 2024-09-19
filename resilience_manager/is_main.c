@@ -640,6 +640,8 @@ struct IS_session *IS_session_find_by_portal(struct list_head *s_data_list,
 void IS_inject_fault_enable(struct IS_session *IS_session, unsigned int enable)
 {
 	IS_session->inject_fault = enable;
+
+	printk("inject_fault_enable == %d\n", IS_session->inject_fault);
 }
 
 unsigned int IS_inject_fault_count(struct IS_session *IS_session)
@@ -647,10 +649,12 @@ unsigned int IS_inject_fault_count(struct IS_session *IS_session)
 	return IS_session->inject_fault_count;
 }
 
-void IS_inject_fault_config_distr(struct IS_session *IS_session, const char* key, const char* val)
+void IS_inject_fault_distr(struct IS_session *IS_session, const char* distr)
 {
-}
+	sscanf(distr, "%f", IS_session->inject_fault_rate);
 
+	printk("inject_fault_rate == %f\n", IS_session->inject_fault_rate);
+}
 
 static int IS_disconnect_handler(struct kernel_cb *cb)
 {

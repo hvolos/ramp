@@ -160,9 +160,7 @@ static ssize_t inject_fault_distr_attr_store(struct config_item *item,
 	IS_session = cgroup_to_IS_session(to_config_group(item->ci_parent));
 	IS_device = cgroup_to_IS_device(to_config_group(item));
 
-	sscanf(page, "%d", &num_faults);
-
-	// IS_inject_fault(IS_session);
+	IS_inject_fault_distr(IS_session, page);
 
 	return count;
 }

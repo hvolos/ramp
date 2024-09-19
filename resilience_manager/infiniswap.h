@@ -397,6 +397,7 @@ struct IS_session {
 	// fault injection
 	unsigned long int inject_fault; // whether to inject fault
 	unsigned long int inject_fault_count; // how many faults injected
+	double inject_fault_rate; // how frequently to inject fault
 
 	//struct kernel_cb 		*cb;	// binding with kernel RDMA
 	int mapped_cb_num;	//How many cbs are remote mapped
