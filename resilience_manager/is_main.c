@@ -243,98 +243,92 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 	struct rdma_ctx *ctx[NDISKS];
 	int i,j;
 
-        // printk("read [%x] len [%x]", offset, len );
+	// printk("read [%x] len [%x]", offset, len );
 	
 	/*ctx synchronization*/	
 	atomic_t* count = kzalloc(sizeof(atomic_t), GFP_KERNEL);
 	atomic_set(count, NDATAS);
-
 	
 	// get ctx_buf based on request address
 	for (i=0; i<NDISKS; i++){
- 	int conn_id = (uint64_t)( bio_data(req->bio)   ) & QUEUE_NUM_MASK;
+		int conn_id = (uint64_t)( bio_data(req->bio)   ) & QUEUE_NUM_MASK;
 
-	IS_conn = IS_conn->IS_sess->IS_conns[conn_id];
+		IS_conn = IS_conn->IS_sess->IS_conns[conn_id];
 
-	if (cb_index[i] == NO_CB_MAPPED){
-	ctx[i] = IS_get_ctx(IS_conn->ctx_pools[i]);
-	continue;
-	}
+		if (cb_index[i] == NO_CB_MAPPED){
+			ctx[i] = IS_get_ctx(IS_conn->ctx_pools[i]);
+			continue;
+		}
 
-	ctx[i] = IS_get_ctx(IS_conn->ctx_pools[  cb_index[i] ]);
-	BUG_ON(!ctx[i]); //ctx NULL
+		ctx[i] = IS_get_ctx(IS_conn->ctx_pools[  cb_index[i] ]);
+		BUG_ON(!ctx[i]); //ctx NULL
 
-	ctx[i]->req = req;
-	ctx[i]->cb = cb[i];
-	//ctx[i]->chunk_index = chunk_index[i]; //chunk_index in cb
-	atomic_set(&ctx[i]->in_flight, CTX_R_IN_FLIGHT);  
-	
+		ctx[i]->req = req;
+		ctx[i]->cb = cb[i];
+		//ctx[i]->chunk_index = chunk_index[i]; //chunk_index in cb
+		atomic_set(&ctx[i]->in_flight, CTX_R_IN_FLIGHT);  
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
-	ctx[i]->rdma_sq_wr.wr.sg_list->length = (len/NDATAS);
-	ctx[i]->rdma_sq_wr.rkey = chunk[i]->remote_rkey;
-	ctx[i]->rdma_sq_wr.remote_addr = chunk[i]->remote_addr + (offset/NDATAS);
-	ctx[i]->rdma_sq_wr.wr.opcode = IB_WR_RDMA_READ;
+		ctx[i]->rdma_sq_wr.wr.sg_list->length = (len/NDATAS);
+		ctx[i]->rdma_sq_wr.rkey = chunk[i]->remote_rkey;
+		ctx[i]->rdma_sq_wr.remote_addr = chunk[i]->remote_addr + (offset/NDATAS);
+		ctx[i]->rdma_sq_wr.wr.opcode = IB_WR_RDMA_READ;
  #else
-	ctx[i]->rdma_sq_wr.sg_list->length = (len/NDATAS);
-	ctx[i]->rdma_sq_wr.wr.rdma.rkey = chunk[i]->remote_rkey;
-	ctx[i]->rdma_sq_wr.wr.rdma.remote_addr = chunk[i]->remote_addr + (offset/NDATAS);
-	ctx[i]->rdma_sq_wr.opcode = IB_WR_RDMA_READ;
+		ctx[i]->rdma_sq_wr.sg_list->length = (len/NDATAS);
+		ctx[i]->rdma_sq_wr.wr.rdma.rkey = chunk[i]->remote_rkey;
+		ctx[i]->rdma_sq_wr.wr.rdma.remote_addr = chunk[i]->remote_addr + (offset/NDATAS);
+		ctx[i]->rdma_sq_wr.opcode = IB_WR_RDMA_READ;
  #endif
 
-	ctx[i]->index = i;
-	ctx[i]->cnt = count;
+		ctx[i]->index = i;
+		ctx[i]->cnt = count;
 	}
 
 
 	for (i=0; i<NDISKS; i++){
 		for (j=0; j<NDISKS; j++){
-		ctx[i]->ctxs[j] = ctx[j];
+			ctx[i]->ctxs[j] = ctx[j];
 		}
 	}
 
 	for (i=0, j=0; i<NDATAS; i++){	
-	if(cb_index[i] == NO_CB_MAPPED){
-		for (; cb_index[NDATAS+j] == NO_CB_MAPPED; j++); //looking for good parity
-		
-		if (j < NDISKS-NDATAS){
-		ret = ib_post_send(cb[NDATAS+j]->qp, (struct ib_send_wr *) &ctx[NDATAS+j]->rdma_sq_wr, &bad_wr);
-		if (ret){
-			printk(KERN_ALERT PFX "client post read %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
-			return ret;
+		if(cb_index[i] == NO_CB_MAPPED){
+			for (; cb_index[NDATAS+j] == NO_CB_MAPPED; j++); //looking for good parity
+			
+			if (j < NDISKS-NDATAS){
+				ret = ib_post_send(cb[NDATAS+j]->qp, (struct ib_send_wr *) &ctx[NDATAS+j]->rdma_sq_wr, &bad_wr);
+				if (ret){
+					printk(KERN_ALERT PFX "client post read %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
+					return ret;
+				}
+				j++;
+			}
+			else {
+				printk(KERN_ALERT PFX "client post read %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
+				return ret;
+			}
 		}
-		j++;
+		else{
+			ret = ib_post_send(cb[i]->qp, (struct ib_send_wr *) &ctx[i]->rdma_sq_wr, &bad_wr); //not returning error
+			//printk("client post read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
+			if (ret){
+				printk(KERN_ALERT PFX "client post read %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
+				return ret;
+			}
 		}
-		else {
-		printk(KERN_ALERT PFX "client post read %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
-		return ret;
-		}
-	}
-	else{
-		ret = ib_post_send(cb[i]->qp, (struct ib_send_wr *) &ctx[i]->rdma_sq_wr, &bad_wr); //not returning error
-		//printk("client post read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
-		if (ret){
-			printk(KERN_ALERT PFX "client post read %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
-			return ret;
-		}
-	
-	}
 	}
 	
 	for (i=0; i < NDATAS+j; i++) {
-	if(cb_index[i] == NO_CB_MAPPED)
-		continue;
-	// printk("waiting for read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
-	rdma_cq_event_handler(cb[i]->cq, cb[i]);
-	// print_buffer("IS_rdma_read",
-	// 				ctx[i]->rdma_buf,
-	// 				ctx[i]->len);
+		if(cb_index[i] == NO_CB_MAPPED)
+			continue;
+		// printk("waiting for read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
+		rdma_cq_event_handler(cb[i]->cq, cb[i]);
+		// print_buffer("IS_rdma_read",
+		// 				ctx[i]->rdma_buf,
+		// 				ctx[i]->len);
 	}
 
-
-
 	return 0;
-
 }
 
 
