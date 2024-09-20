@@ -80,6 +80,8 @@
 #include <rdma/rdma_cm.h>
 #include <linux/log2.h>
 
+#include "mt19937-64.h"
+
 #define MAX_SGL_LEN 1	/* max pages in a single struct request (swap IO request) */
 
 // from kernel 
@@ -386,18 +388,28 @@ enum cb_state {
 #define DEV_RDMA_ON		1
 #define DEV_RDMA_OFF	0
 
-//  server selection, call m server each time.
+// server selection, call m server each time.
 #define SERVER_SELECT_NUM NDISKS+1
+
+struct IS_fault_injection_disk {
+	unsigned long long access_count; // how many accesses
+	unsigned long long access_count_before_next_fault; // how many remaining accesses before the next fault occurs
+	unsigned long long fault_count; // how many faults injected
+	MTRand64 seed; // seed used by the random pseudo number generator
+};
+
+struct IS_fault_injection {
+	unsigned int inject_fault; // whether to inject fault
+	unsigned long long fault_rate; // how frequently to inject fault
+	struct IS_fault_injection_disk disk_fault[NDISKS]; // per disk fault information
+};
 
 struct IS_session {
 	// Nov19 request distribution
 	unsigned long int *read_request_count;	//how many requests on each CPU
 	unsigned long int *write_request_count;	//how many requests on each CPU
 
-	// fault injection
-	unsigned long int inject_fault; // whether to inject fault
-	unsigned long int inject_fault_count; // how many faults injected
-	double inject_fault_rate; // how frequently to inject fault
+	struct IS_fault_injection IS_fault_injection; // fault injection metadata
 
 	//struct kernel_cb 		*cb;	// binding with kernel RDMA
 	int mapped_cb_num;	//How many cbs are remote mapped
@@ -524,6 +536,12 @@ struct IS_session *IS_session_find_by_portal(struct list_head *s_data_list,
 						 const char *portal);
 const char* IS_device_state_str(struct IS_file *dev);
 int IS_set_device_state(struct IS_file *dev, enum IS_dev_state state);
-void IS_inject_fault_enable(struct IS_session *IS_session, unsigned int enable);
-unsigned int IS_inject_fault_count(struct IS_session *IS_session);
-void IS_inject_fault_distr(struct IS_session *IS_session, const char* distr);
+void IS_fault_injection_init(struct IS_fault_injection *IS_fault_injection);
+void IS_fault_injection_enable(struct IS_fault_injection *IS_fault_injection, unsigned int enable);
+unsigned long long IS_fault_injection_fault_count(struct IS_fault_injection *IS_fault_injection);
+void IS_fault_injection_distr(struct IS_fault_injection *IS_fault_injection, const char* distr);
+void IS_fault_injection_access(struct IS_fault_injection *IS_fault_injection, unsigned int disk);
+int IS_fault_injection_inject_fault(struct IS_fault_injection *IS_fault_injection, unsigned int disk);
+
+
+

@@ -41,11 +41,11 @@ def deploy_hydra(roles):
     resource_monitor.deploy()
     resource_monitor.output()
 
-    # deploy resilience manager
-    cmd = f"{HYDRA_PATH}/setup/resilience_manager_setup.sh"
-    resilience_manager = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True, extra_vars = extra_vars)
-    resilience_manager.deploy()
-    resilience_manager.output()
+    # # deploy resilience manager
+    # cmd = f"{HYDRA_PATH}/setup/resilience_manager_setup.sh"
+    # resilience_manager = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True, extra_vars = extra_vars)
+    # resilience_manager.deploy()
+    # resilience_manager.output()
 
 def destroy_hydra(roles):
     """Deploy Hydra"""
@@ -137,10 +137,10 @@ def main(argv):
 
     roles, networks = provider.init()
 
-    if argv[1] == "deploy":
+    if argv[1] == "deploy_hydra":
         deploy_hydra(roles)
 
-    if argv[1] == "destroy":
+    if argv[1] == "destroy_hydra":
         destroy_hydra(roles)
 
     if argv[1] == "deploy_memcached":

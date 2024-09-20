@@ -115,7 +115,7 @@ static ssize_t inject_fault_enable_attr_store(struct config_item *item,
 
 	sscanf(page, "%d", &enable);
 
-	IS_inject_fault_enable(IS_session, enable);
+	IS_fault_injection_enable(&IS_session->IS_fault_injection, enable);
 
 	return count;
 }
@@ -137,7 +137,7 @@ static ssize_t inject_fault_count_attr_show(struct config_item *item,
 	IS_session = cgroup_to_IS_session(to_config_group(item->ci_parent));
 	IS_device = cgroup_to_IS_device(to_config_group(item));
 
-	fault_count = IS_inject_fault_count(IS_session);
+	fault_count = IS_fault_injection_fault_count(&IS_session->IS_fault_injection);
 	ret = snprintf(page, PAGE_SIZE, "%d\n", fault_count);
 
 	return ret;
@@ -153,14 +153,12 @@ static ssize_t inject_fault_distr_attr_store(struct config_item *item,
 {
 	struct IS_session *IS_session;
 	struct IS_file *IS_device;
-	int num_faults;
-	ssize_t ret;
 
 	pr_info("%s\n", __func__);
 	IS_session = cgroup_to_IS_session(to_config_group(item->ci_parent));
 	IS_device = cgroup_to_IS_device(to_config_group(item));
 
-	IS_inject_fault_distr(IS_session, page);
+	IS_fault_injection_distr(&IS_session->IS_fault_injection, page);
 
 	return count;
 }

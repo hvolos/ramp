@@ -41,7 +41,7 @@
 
 #include "infiniswap.h"
 #include <linux/bio.h>
-
+#include <linux/types.h>
 
 void print_buffer(char* tag, char* buf, int len) {
 	int i,j;
@@ -169,7 +169,6 @@ void show_rdma_info(struct IS_rdma_info * info){
 static void rdma_cq_event_handler(struct ib_cq * cq, struct kernel_cb *cb);
 static int IS_send_fault(struct kernel_cb *cb);
 
-
 inline int IS_set_device_state(struct IS_file *xdev,
 				 enum IS_dev_state state)
 {
@@ -292,12 +291,23 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 		}
 	}
 
-	for (i=0, j=0; i<NDATAS; i++){	
-		if(cb_index[i] == NO_CB_MAPPED){
-			for (; cb_index[NDATAS+j] == NO_CB_MAPPED; j++); //looking for good parity
+	// inject faults
+	int inject_fault_index[NDISKS];	
+	for (i=0; i<NDISKS; i++){
+		inject_fault_index[i] = IS_fault_injection_inject_fault(&IS_conn->IS_sess->IS_fault_injection, i);
+		if (inject_fault_index[i]){
+			IS_send_fault(cb[i]);
+		}
+	}
+	
+	for (i=0, j=0; i<NDATAS; i++){
+		int inject_fault = 0;
+		if(cb_index[i] == NO_CB_MAPPED || inject_fault_index[i]){
+			for (; cb_index[NDATAS+j] == NO_CB_MAPPED || inject_fault_index[i]; j++); //looking for good parity
 			
 			if (j < NDISKS-NDATAS){
 				ret = ib_post_send(cb[NDATAS+j]->qp, (struct ib_send_wr *) &ctx[NDATAS+j]->rdma_sq_wr, &bad_wr);
+				IS_fault_injection_access(&IS_conn->IS_sess->IS_fault_injection, NDATAS+j);
 				if (ret){
 					printk(KERN_ALERT PFX "client post read %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
 					return ret;
@@ -310,10 +320,8 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 			}
 		}
 		else{
-			if (IS_conn->IS_sess->inject_fault){
-				IS_send_fault(cb[i]);
-			}
 			ret = ib_post_send(cb[i]->qp, (struct ib_send_wr *) &ctx[i]->rdma_sq_wr, &bad_wr); //not returning error
+			IS_fault_injection_access(&IS_conn->IS_sess->IS_fault_injection, i);
 			// printk("client post read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
 			if (ret){
 				printk(KERN_ALERT PFX "client post read %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
@@ -540,6 +548,20 @@ static int IS_send_bind_single(struct kernel_cb *cb, int select_chunk)
 	return 0;	
 }
 
+static int IS_send_done(struct kernel_cb *cb, int num)
+{
+	int ret = 0;
+	struct ib_send_wr * bad_wr;
+	cb->send_buf.type = DONE;
+	cb->send_buf.size_gb = num;
+	ret = ib_post_send(cb->qp, &cb->sq_wr, &bad_wr);
+	if (ret) {
+		printk(KERN_ERR PFX "DONE MSG send error %d\n", ret);
+		return ret;
+	}
+	return 0;
+}
+
 static int IS_send_fault(struct kernel_cb *cb)
 {
 	int ret = 0;
@@ -555,20 +577,6 @@ static int IS_send_fault(struct kernel_cb *cb)
 	}
 	rdma_cq_event_handler(cb->cq, cb);
 
-	return 0;
-}
-
-static int IS_send_done(struct kernel_cb *cb, int num)
-{
-	int ret = 0;
-	struct ib_send_wr * bad_wr;
-	cb->send_buf.type = DONE;
-	cb->send_buf.size_gb = num;
-	ret = ib_post_send(cb->qp, &cb->sq_wr, &bad_wr);
-	if (ret) {
-		printk(KERN_ERR PFX "DONE MSG send error %d\n", ret);
-		return ret;
-	}
 	return 0;
 }
 
@@ -635,25 +643,6 @@ struct IS_session *IS_session_find_by_portal(struct list_head *s_data_list,
 	mutex_unlock(&g_lock);
 
 	return ret;
-}
-
-void IS_inject_fault_enable(struct IS_session *IS_session, unsigned int enable)
-{
-	IS_session->inject_fault = enable;
-
-	printk("inject_fault_enable == %d\n", IS_session->inject_fault);
-}
-
-unsigned int IS_inject_fault_count(struct IS_session *IS_session)
-{
-	return IS_session->inject_fault_count;
-}
-
-void IS_inject_fault_distr(struct IS_session *IS_session, const char* distr)
-{
-	sscanf(distr, "%f", IS_session->inject_fault_rate);
-
-	printk("inject_fault_rate == %f\n", IS_session->inject_fault_rate);
 }
 
 static int IS_disconnect_handler(struct kernel_cb *cb)
@@ -2145,9 +2134,7 @@ int IS_session_create(const char *portal, struct IS_session *IS_session)
 			goto err_destroy_conns;
 	}
 
-	// Fault injection
-	IS_session->inject_fault = 0;
-	IS_session->inject_fault_count = 0;
+	IS_fault_injection_init(&IS_session->IS_fault_injection);
 
 	return 0;
 

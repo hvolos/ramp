@@ -36,8 +36,11 @@ obj-m := hydra.o
 
 hydra-objs := 	\
 	is_configfs.o	\
+	is_fault.o	\
 	is_mq.o	\
 	is_main.o \
+	mt19937-64.o \
+	mt19937.o \
 	erasure_code/ec_base.o \
 	erasure_code/ec_highlevel_func.o \
 	erasure_code/gf_vect_dot_prod_avx.o  \
