@@ -69,6 +69,7 @@ int IS_fault_injection_inject_fault(struct IS_fault_injection *IS_fault_injectio
     if (IS_fault_injection->inject_fault == 1 && 
         IS_fault_injection->disk_fault[disk].access_count_before_next_fault == 0)
     {
+        IS_fault_injection->disk_fault[disk].fault_count++;
         IS_fault_injection->disk_fault[disk].access_count_before_next_fault = 
             1 + genrand64_uint64(&IS_fault_injection->disk_fault[disk].seed) % (2*IS_fault_injection->fault_rate);
         return 1;

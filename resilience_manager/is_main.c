@@ -297,13 +297,13 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 		inject_fault_index[i] = IS_fault_injection_inject_fault(&IS_conn->IS_sess->IS_fault_injection, i);
 		if (inject_fault_index[i]){
 			IS_send_fault(cb[i]);
+			inject_fault_index[i] = 0;
 		}
 	}
 	
 	for (i=0, j=0; i<NDATAS; i++){
-		int inject_fault = 0;
 		if(cb_index[i] == NO_CB_MAPPED || inject_fault_index[i]){
-			for (; cb_index[NDATAS+j] == NO_CB_MAPPED || inject_fault_index[i]; j++); //looking for good parity
+			for (; cb_index[NDATAS+j] == NO_CB_MAPPED || inject_fault_index[NDATAS+j]; j++); //looking for good parity
 			
 			if (j < NDISKS-NDATAS){
 				ret = ib_post_send(cb[NDATAS+j]->qp, (struct ib_send_wr *) &ctx[NDATAS+j]->rdma_sq_wr, &bad_wr);
@@ -331,7 +331,7 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 	}
 	
 	for (i=0; i < NDATAS+j; i++) {
-		if(cb_index[i] == NO_CB_MAPPED)
+		if(cb_index[i] == NO_CB_MAPPED || inject_fault_index[i])
 			continue;
 		// printk("waiting for read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
 		rdma_cq_event_handler(cb[i]->cq, cb[i]);
