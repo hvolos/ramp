@@ -97,7 +97,7 @@ static ssize_t state_attr_show(struct config_item *item,
 }
 
 // bind in IS_device_item_ops
-static ssize_t inject_fault_enable_attr_store(struct config_item *item,
+static ssize_t fault_injection_enable_attr_store(struct config_item *item,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
 #else
 			         struct configfs_attribute *attr,
@@ -106,8 +106,7 @@ static ssize_t inject_fault_enable_attr_store(struct config_item *item,
 {
 	struct IS_session *IS_session;
 	struct IS_file *IS_device;
-	int enable;
-	ssize_t ret;
+	unsigned int enable;
 
 	pr_info("%s\n", __func__);
 	IS_session = cgroup_to_IS_session(to_config_group(item->ci_parent));
@@ -115,13 +114,32 @@ static ssize_t inject_fault_enable_attr_store(struct config_item *item,
 
 	sscanf(page, "%d", &enable);
 
-	IS_fault_injection_enable(&IS_session->IS_fault_injection, enable);
+	IS_fault_injection_set_enable(&IS_session->IS_fault_injection, enable);
 
 	return count;
 }
 
 // bind in IS_device_item_ops
-static ssize_t inject_fault_count_attr_show(struct config_item *item,
+static ssize_t fault_injection_enable_attr_show(struct config_item *item,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
+#else
+			       struct configfs_attribute *attr,
+#endif
+			       char *page)
+{
+	struct IS_session *IS_session;
+	ssize_t ret;
+
+	pr_info("%s\n", __func__);
+	IS_session = cgroup_to_IS_session(to_config_group(item->ci_parent));
+
+	ret = snprintf(page, PAGE_SIZE, "%d\n", IS_fault_injection_enable(&IS_session->IS_fault_injection));
+
+	return ret;
+}
+
+// bind in IS_device_item_ops
+static ssize_t fault_injection_fault_count_attr_show(struct config_item *item,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
 #else
 			       struct configfs_attribute *attr,
@@ -144,7 +162,7 @@ static ssize_t inject_fault_count_attr_show(struct config_item *item,
 }
 
 // bind in IS_device_item_ops
-static ssize_t inject_fault_distr_attr_store(struct config_item *item,
+static ssize_t fault_injection_distr_attr_store(struct config_item *item,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
 #else
 			         struct configfs_attribute *attr,
@@ -158,9 +176,29 @@ static ssize_t inject_fault_distr_attr_store(struct config_item *item,
 	IS_session = cgroup_to_IS_session(to_config_group(item->ci_parent));
 	IS_device = cgroup_to_IS_device(to_config_group(item));
 
-	IS_fault_injection_distr(&IS_session->IS_fault_injection, page);
+	IS_fault_injection_set_distr(&IS_session->IS_fault_injection, page);
 
 	return count;
+}
+
+// bind in IS_device_item_ops
+static ssize_t fault_injection_distr_attr_show(struct config_item *item,
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
+#else
+			       struct configfs_attribute *attr,
+#endif
+			       char *page)
+{
+	struct IS_session *IS_session;
+	struct IS_file *IS_device;
+	ssize_t ret;
+	unsigned int fault_count;
+
+	pr_info("%s\n", __func__);
+	IS_session = cgroup_to_IS_session(to_config_group(item->ci_parent));
+	IS_device = cgroup_to_IS_device(to_config_group(item));
+
+	return IS_fault_injection_distr(&IS_session->IS_fault_injection, page);
 }
 
 // bind in IS_device_type
@@ -176,10 +214,10 @@ static struct configfs_item_operations IS_device_item_ops = {
 static struct configfs_attribute device_item_attr = {
 		.ca_owner       = THIS_MODULE,
 		.ca_name        = "device",
-		.ca_mode        = S_IWUGO,
+		.ca_mode        = S_IWUGO | S_IRUGO,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
-		.show		= state_attr_show,
-		.store		= device_attr_store,
+		.show           = state_attr_show,
+		.store          = device_attr_store,
 #endif
 };
 
@@ -189,37 +227,39 @@ static struct configfs_attribute state_item_attr = {
 		.ca_name        = "state",
 		.ca_mode        = S_IRUGO,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
-		.show		= state_attr_show,
+		.show           = state_attr_show,
 #endif
 };
 
 // bind in IS_device_item_attrs
-static struct configfs_attribute inject_fault_enable_item_attr = {
+static struct configfs_attribute fault_injection_enable_item_attr = {
 		.ca_owner       = THIS_MODULE,
-		.ca_name        = "inject_fault_enable",
-		.ca_mode        = S_IWUGO,
+		.ca_name        = "fault_injection_enable",
+		.ca_mode        = S_IWUGO | S_IRUGO,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
-		.store		= inject_fault_enable_attr_store,
+		.show           = fault_injection_enable_attr_show,
+		.store          = fault_injection_enable_attr_store,
 #endif
 };
 
 // bind in IS_device_item_attrs
-static struct configfs_attribute inject_fault_count_item_attr = {
+static struct configfs_attribute fault_injection_fault_count_item_attr = {
 		.ca_owner       = THIS_MODULE,
-		.ca_name        = "inject_fault_count",
+		.ca_name        = "fault_injection_fault_count",
 		.ca_mode        = S_IRUGO,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
-		.show		= inject_fault_count_attr_show,
+		.show		= fault_injection_fault_count_attr_show,
 #endif
 };
 
 // bind in IS_device_item_attrs
-static struct configfs_attribute inject_fault_distr_item_attr = {
+static struct configfs_attribute fault_injection_distr_item_attr = {
 		.ca_owner       = THIS_MODULE,
-		.ca_name        = "inject_fault_distr",
-		.ca_mode        = S_IWUGO,
+		.ca_name        = "fault_injection_distr",
+		.ca_mode        = S_IWUGO | S_IRUGO,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 4, 0)
-		.store		= inject_fault_distr_attr_store,
+		.show           = fault_injection_distr_attr_show,
+		.store          = fault_injection_distr_attr_store,
 #endif
 };
 
@@ -227,9 +267,9 @@ static struct configfs_attribute inject_fault_distr_item_attr = {
 static struct configfs_attribute *IS_device_item_attrs[] = {
 		&device_item_attr,
 		&state_item_attr,
-		&inject_fault_enable_item_attr,
-		&inject_fault_count_item_attr,
-		&inject_fault_distr_item_attr,
+		&fault_injection_enable_item_attr,
+		&fault_injection_fault_count_item_attr,
+		&fault_injection_distr_item_attr,
 		NULL,
 };
 

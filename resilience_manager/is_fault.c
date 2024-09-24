@@ -13,7 +13,12 @@ void IS_fault_injection_init(struct IS_fault_injection *IS_fault_injection)
     }
 }
 
-void IS_fault_injection_enable(struct IS_fault_injection *IS_fault_injection, unsigned int enable)
+unsigned int IS_fault_injection_enable(struct IS_fault_injection *IS_fault_injection)
+{
+	return IS_fault_injection->inject_fault;
+}
+
+void IS_fault_injection_set_enable(struct IS_fault_injection *IS_fault_injection, unsigned int enable)
 {
 	IS_fault_injection->inject_fault = enable;
 }
@@ -40,12 +45,17 @@ static void init_uniform_distr(struct IS_fault_injection *IS_fault_injection, un
     }
 }
 
-void IS_fault_injection_distr(struct IS_fault_injection *IS_fault_injection, const char* distr)
+void IS_fault_injection_set_distr(struct IS_fault_injection *IS_fault_injection, const char* distr)
 {
     unsigned long long fault_rate;
     sscanf(distr, "%lld", &fault_rate);
 
     init_uniform_distr(IS_fault_injection, fault_rate);
+}
+
+ssize_t IS_fault_injection_distr(struct IS_fault_injection *IS_fault_injection, char* distr)
+{
+    return snprintf(distr, PAGE_SIZE, "%d\n", IS_fault_injection->fault_rate);
 }
 
 void IS_fault_injection_access(struct IS_fault_injection *IS_fault_injection, unsigned int disk)

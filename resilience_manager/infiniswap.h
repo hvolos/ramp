@@ -537,9 +537,11 @@ struct IS_session *IS_session_find_by_portal(struct list_head *s_data_list,
 const char* IS_device_state_str(struct IS_file *dev);
 int IS_set_device_state(struct IS_file *dev, enum IS_dev_state state);
 void IS_fault_injection_init(struct IS_fault_injection *IS_fault_injection);
-void IS_fault_injection_enable(struct IS_fault_injection *IS_fault_injection, unsigned int enable);
+unsigned int IS_fault_injection_enable(struct IS_fault_injection *IS_fault_injection);
+void IS_fault_injection_set_enable(struct IS_fault_injection *IS_fault_injection, unsigned int enable);
 unsigned long long IS_fault_injection_fault_count(struct IS_fault_injection *IS_fault_injection);
-void IS_fault_injection_distr(struct IS_fault_injection *IS_fault_injection, const char* distr);
+void IS_fault_injection_set_distr(struct IS_fault_injection *IS_fault_injection, const char* distr);
+ssize_t IS_fault_injection_distr(struct IS_fault_injection *IS_fault_injection, char* distr);
 void IS_fault_injection_access(struct IS_fault_injection *IS_fault_injection, unsigned int disk);
 int IS_fault_injection_inject_fault(struct IS_fault_injection *IS_fault_injection, unsigned int disk);
 

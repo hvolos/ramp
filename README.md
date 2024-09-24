@@ -24,3 +24,19 @@ cat /proc/$(ps aux | grep memcached | grep users | awk '{print $2}')/cgroup
 ## Checking swap usage
 
 swapon -s
+
+## Configuring fault injection
+
+
+Setting fault rate
+
+```
+echo 1000 | sudo tee /sys/kernel/config/hydra/hydrahost0/hydra0/fault_injection_distr
+sudo cat /sys/kernel/config/hydra/hydrahost0/hydra0/fault_injection_distr
+```
+
+Enabling fault injection
+
+```
+echo 1 | sudo tee /sys/kernel/config/hydra/hydrahost0/hydra0/fault_injection_enable
+```
