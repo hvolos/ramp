@@ -1065,150 +1065,149 @@ static int client_read_done(struct kernel_cb * cb, struct ib_wc *wc)
 	req = ctx->req;
 	bio = req->bio;
 
-        atomic_set(&ctx->in_flight, CTX_IDLE);
-        ctx->chunk_index = -1;
-        ctx->chunk_ptr = NULL;
-        ctx->req = NULL;
+	atomic_set(&ctx->in_flight, CTX_IDLE);
+	ctx->chunk_index = -1;
+	ctx->chunk_ptr = NULL;
+	ctx->req = NULL;
 
 #ifdef REP
 
 	if( atomic_dec_and_test(ctx->cnt) ){
 
-	struct rdma_ctx* ctxs[NDISKS];
+		struct rdma_ctx* ctxs[NDISKS];
 
-	for (i=0; i<NDISKS; i++){
-		ctxs[i] = ctx->ctxs[i];
-	}
-
+		for (i=0; i<NDISKS; i++){
+			ctxs[i] = ctx->ctxs[i];
+		}
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
-	if (bio_multiple_segments(bio)){
-        /*read can have segments */
-        struct bio_vec bvl;
-        struct bvec_iter iter;
-        u32  bio_offset= 0;
+		if (bio_multiple_segments(bio)){
+			/*read can have segments */
+			struct bio_vec bvl;
+			struct bvec_iter iter;
+			u32  bio_offset= 0;
 
-        bio_for_each_segment(bvl, bio, iter){
-        BUG_ON(bvl.bv_len!= IS_PAGE_SIZE); //each bvec is page
-        memcpy(page_address(bvl.bv_page),
-               ctxs[i]->rdma_buf + bio_offset,
-               IS_PAGE_SIZE);
-        bio_offset += IS_PAGE_SIZE;
-        }
-        }
-        else
+			bio_for_each_segment(bvl, bio, iter){
+				BUG_ON(bvl.bv_len!= IS_PAGE_SIZE); //each bvec is page
+				memcpy(page_address(bvl.bv_page),
+					ctxs[i]->rdma_buf + bio_offset,
+					IS_PAGE_SIZE);
+				bio_offset += IS_PAGE_SIZE;
+			}
+		}
+		else
 #endif
-	{
-        u32  bio_offset;
-        for (bio_offset=0; bio; bio = bio->bi_next, bio_offset+=IS_PAGE_SIZE){
-        for (i=0; i<NDATAS; i++){
-        memcpy( bio_data(bio)+ i*IS_PAGE_SIZE/NDATAS,
-                ctxs[i]->rdma_buf + bio_offset/NDATAS,
-                IS_PAGE_SIZE/NDATAS );								
-        // printk("client_read_done %lu\n", bio_offset);
-				// print_buffer("client_read_done",
-        //         ctxs[i]->rdma_buf + bio_offset/NDATAS,
-        //         IS_PAGE_SIZE/NDATAS );
-        }
-        }
-        }
+		{
+			u32  bio_offset;
+			for (bio_offset=0; bio; bio = bio->bi_next, bio_offset+=IS_PAGE_SIZE){
+				for (i=0; i<NDATAS; i++){
+					memcpy( bio_data(bio)+ i*IS_PAGE_SIZE/NDATAS,
+							ctxs[i]->rdma_buf + bio_offset/NDATAS,
+							IS_PAGE_SIZE/NDATAS );								
+					// printk("client_read_done %lu\n", bio_offset);
+					// print_buffer("client_read_done",
+					//         ctxs[i]->rdma_buf + bio_offset/NDATAS,
+					//         IS_PAGE_SIZE/NDATAS );
+				}
+			}
+		}
 
-        #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0)
-                blk_mq_end_request(req, 0);
-        #else
-                blk_mq_end_io(req, 0);
-        #endif
+		#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0)
+				blk_mq_end_request(req, 0);
+		#else
+				blk_mq_end_io(req, 0);
+		#endif
 
 
-	for (i=0; i<NDISKS; i++){
-        IS_insert_ctx(ctxs[i]); //return ctxs
-	}
+		for (i=0; i<NDISKS; i++){
+			IS_insert_ctx(ctxs[i]); //return ctxs
+		}
 
 	}
 #endif
 
 
 #ifdef EC
-//	printk(" ctx_index %d\n%s", ctx->index, ctx->rdma_buf );
+	// printk(" ctx_index %d\n%s", ctx->index, ctx->rdma_buf );
 
 	if( atomic_dec_and_test( ctx->cnt ) ){
 
-	struct rdma_ctx* ctxs[NDISKS];
+		struct rdma_ctx* ctxs[NDISKS];
 
-	/*pointers for EC*/
-	unsigned char *ptrs[NDISKS];
-	unsigned char *data[NDATAS];
-        unsigned char *recov[NDISKS-NDATAS];
+		/*pointers for EC*/
+		unsigned char *ptrs[NDISKS];
+		unsigned char *data[NDATAS];
+		unsigned char *recov[NDISKS-NDATAS];
 
 
-	for (i=0; i<NDISKS; i++){
-	ctxs[i] = ctx->ctxs[i];
-	ptrs[i] = ctxs[i]->rdma_buf; //point parity 
-	}
+		for (i=0; i<NDISKS; i++){
+			ctxs[i] = ctx->ctxs[i];
+			ptrs[i] = ctxs[i]->rdma_buf; //point parity 
+		}
 
-	/*	recovery	*/
-	if (nsrcerrs > 0){
-	
-	for (i=0; i < nerrs; i++){ //nsrcerrs?{
-		recov[i] = ptrs[src_err_list[i]];
-		//printk("recovery target: err index: %d \n", src_err_list[i] );
-	}
+		/*	recovery	*/
+		if (nsrcerrs > 0){
+		
+			for (i=0; i < nerrs; i++){ //nsrcerrs?{
+				recov[i] = ptrs[src_err_list[i]];
+				//printk("recovery target: err index: %d \n", src_err_list[i] );
+			}
 
-	// Pack recovery array as list of valid sources
-	// Its order must be the same as the order
-	// to generate matrix b in gf_gen_decode_matrix
+			// Pack recovery array as list of valid sources
+			// Its order must be the same as the order
+			// to generate matrix b in gf_gen_decode_matrix
 
-	for (i=0; i < NDATAS; i++){ 
-		data[i] = ptrs[ decode_index[i] ];
-		//printk("recovery data: decode index: %d \n", decode_index[i] );
-	}
+			for (i=0; i < NDATAS; i++){ 
+				data[i] = ptrs[ decode_index[i] ];
+				// printk("recovery data: decode index: %d \n", decode_index[i] );
+			}
 
-	kernel_fpu_begin();
-	ec_encode_data_avx( blk_rq_bytes(req)/NDATAS, NDATAS, nerrs, decode_tbls, data, recov );
-	kernel_fpu_end();
+			kernel_fpu_begin();
+			ec_encode_data_avx( blk_rq_bytes(req)/NDATAS, NDATAS, nerrs, decode_tbls, data, recov );
+			kernel_fpu_end();
 
-	}
+		}
 
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 14, 0)
-	if (bio_multiple_segments(bio)){
-	/*read can have segments */
-        struct bio_vec bvl;
-        struct bvec_iter iter;
-        u32  bio_offset= 0;
+		if (bio_multiple_segments(bio)){
+			/*read can have segments */
+			struct bio_vec bvl;
+			struct bvec_iter iter;
+			u32  bio_offset= 0;
 
-	bio_for_each_segment(bvl, bio, iter){
-	BUG_ON(bvl.bv_len!= IS_PAGE_SIZE); //each bvec is page
-	for(i=0; i<NDATAS; i++){
-        memcpy(page_address(bvl.bv_page) + i*IS_PAGE_SIZE/NDATAS,
-	       ctxs[i]->rdma_buf + bio_offset/NDATAS,
-               IS_PAGE_SIZE/NDATAS);
-        }
-	bio_offset += IS_PAGE_SIZE;
-        }
-	}
-	else
+			bio_for_each_segment(bvl, bio, iter){
+			BUG_ON(bvl.bv_len!= IS_PAGE_SIZE); //each bvec is page
+				for(i=0; i<NDATAS; i++){
+					memcpy(page_address(bvl.bv_page) + i*IS_PAGE_SIZE/NDATAS,
+					ctxs[i]->rdma_buf + bio_offset/NDATAS,
+						IS_PAGE_SIZE/NDATAS);
+				}
+				bio_offset += IS_PAGE_SIZE;
+			}
+		}
+		else
 #endif
-	{
-        u32  bio_offset;
-        for (bio_offset=0; bio; bio = bio->bi_next, bio_offset+=IS_PAGE_SIZE){
-	for (i=0; i<NDATAS; i++){
-        memcpy( bio_data(bio)+ i*IS_PAGE_SIZE/NDATAS,
-		ctxs[i]->rdma_buf + bio_offset/NDATAS,
-                IS_PAGE_SIZE/NDATAS );
-	}
-        }
-        }
+		{
+			u32  bio_offset;
+			for (bio_offset=0; bio; bio = bio->bi_next, bio_offset+=IS_PAGE_SIZE){
+				for (i=0; i<NDATAS; i++){
+					memcpy( bio_data(bio)+ i*IS_PAGE_SIZE/NDATAS,
+					ctxs[i]->rdma_buf + bio_offset/NDATAS,
+							IS_PAGE_SIZE/NDATAS );
+				}
+			}
+	    }
 
-        #if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0)
-                blk_mq_end_request(req, 0);
-        #else
-                blk_mq_end_io(req, 0);
-        #endif
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 18, 0)
+		blk_mq_end_request(req, 0);
+#else
+		blk_mq_end_io(req, 0);
+#endif
 
-	for (i=0; i<NDISKS; i++){
-        IS_insert_ctx(ctxs[i]); //return ctxs
-	}
+		for (i=0; i<NDISKS; i++){
+			IS_insert_ctx(ctxs[i]); //return ctxs
+		}
 
 	}	
 #endif

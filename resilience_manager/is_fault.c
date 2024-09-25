@@ -62,6 +62,7 @@ void IS_fault_injection_access(struct IS_fault_injection *IS_fault_injection, un
 {
     IS_fault_injection->disk_fault[disk].access_count++;
     IS_fault_injection->disk_fault[disk].access_count_before_next_fault--;
+    printk(KERN_INFO "%s access_count_before_next_fault == %d\n", IS_fault_injection->disk_fault[disk].access_count_before_next_fault);
 }
 
 int IS_fault_injection_inject_fault(struct IS_fault_injection *IS_fault_injection, unsigned int disk)
