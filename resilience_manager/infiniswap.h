@@ -393,7 +393,7 @@ enum cb_state {
 
 struct IS_fault_injection_disk {
 	unsigned long long access_count; // how many accesses
-	unsigned long long access_count_before_next_fault; // how many remaining accesses before the next fault occurs
+	long long access_count_before_next_fault; // how many remaining accesses before the next fault occurs
 	unsigned long long fault_count; // how many faults injected
 	MTRand64 seed; // seed used by the random pseudo number generator
 };
