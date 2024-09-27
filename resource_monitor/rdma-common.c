@@ -4,9 +4,11 @@
  * GPLv2 License
  */
 #include "rdma-common.h"
+#include <time.h>
 
 extern long page_size;
 extern int running;
+extern int fault_latency_us;
 
 static void build_context(struct ibv_context *verbs);
 static void build_qp_attr(struct ibv_qp_init_attr *qp_attr);
@@ -15,6 +17,7 @@ static void * poll_cq(void *);
 static void post_receives(struct connection *conn);
 static void register_memory(struct connection *conn);
 static void send_message(struct connection *conn);
+static void send_fault_done(void *context);
 
 struct rdma_session session;
 
@@ -55,6 +58,24 @@ void die(const char *reason)
 {
   fprintf(stderr, "%s\n", reason);
   exit(EXIT_FAILURE);
+}
+
+// Function to calculate the difference between two timespec structures in microseconds
+long diff_in_us(struct timespec *start, struct timespec *end) {
+    return (end->tv_sec - start->tv_sec) * 1000000 + (end->tv_nsec - start->tv_nsec) / 1000;
+}
+
+// Function to spin until the specified number of microseconds has elapsed
+void spin_microseconds(long microseconds) {
+    struct timespec start, current;
+    
+    // Get the starting time
+    clock_gettime(CLOCK_MONOTONIC, &start);
+    
+    do {
+        // Get the current time
+        clock_gettime(CLOCK_MONOTONIC, &current);
+    } while (diff_in_us(&start, &current) < microseconds);
 }
 
 long get_free_mem(void)
@@ -552,6 +573,8 @@ void on_completion(struct ibv_wc *wc)
       case FAULT:
         printf("%s, FAULT \n", __func__);
         atomic_set(&conn->cq_qp_state, CQ_QP_BUSY);
+        spin_microseconds(fault_latency_us);
+        send_fault_done(conn);
         post_receives(conn);
         break;
       case DONE:
@@ -739,6 +762,14 @@ void send_evict(void *context, int n)
   for (i=0; i<MAX_MR_SIZE_GB; i++){
     conn->send_msg->rkey[i] = 0;
   }
+  send_message(conn);
+}
+
+void send_fault_done(void *context)
+{
+  struct connection *conn = (struct connection *)context;
+  printf("%s, FAULT DONE in conn%d\n", __func__, conn->conn_index);
+  conn->send_msg->type = FAULT_DONE;
   send_message(conn);
 }
 

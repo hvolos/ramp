@@ -296,7 +296,10 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 	for (i=0; i<NDISKS; i++){
 		inject_fault_index[i] = IS_fault_injection_inject_fault(&IS_conn->IS_sess->IS_fault_injection, i);
 		if (inject_fault_index[i]){
+			// send fault injection request
 			IS_send_fault(cb[i]);
+			// wait for completion of fault injection request
+			rdma_cq_event_handler(cb[i]->cq, cb[i]);
 			inject_fault_index[i] = 0;
 		}
 	}
@@ -1041,6 +1044,10 @@ static int client_recv(struct kernel_cb *cb, struct ib_wc *wc)
 			cb->state = RECV_STOP;	
 			client_recv_stop(cb);
 			break;
+		case FAULT_DONE:
+			printk("FAULT DONE\n");	
+			cb->state = RECV_FAULT_DONE;	
+			break;			
 		default:
 			pr_info(PFX "client receives unknown msg\n");
 			return -1; 	

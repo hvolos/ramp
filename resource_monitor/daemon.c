@@ -11,8 +11,56 @@ static int on_connection(struct rdma_cm_id *id);
 static int on_disconnect(struct rdma_cm_id *id);
 static int on_event(struct rdma_cm_event *event);
 static void usage(const char *argv0);
+
 long page_size;
 int running;
+int fault_latency_us = 30; // default value
+
+void usage(const char *prog_name) 
+{
+  fprintf(stderr, "usage: %s [-f latency] ip port\n", prog_name);
+  exit(1);
+}
+
+int parse_args(int argc, char *argv[], char **ip, int *port, int *fault_latency_us) {
+  int opt;
+  
+  *ip = NULL;
+  *port = -1;
+
+  while ((opt = getopt(argc, argv, "f:")) != -1) {
+    switch (opt) {
+      case 'f':
+        *fault_latency_us = atoi(optarg);
+        if (*fault_latency_us <= 0) {
+            fprintf(stderr, "Error: Invalid fault latency value. It must be a positive integer.\n");
+            return 1;
+        }                
+        break;
+      default:
+        usage(argv[0]);
+        return 1;
+    }
+  }
+
+  // Ensure the required arguments are provided
+  if ((argc - optind) < 2) {
+    usage(argv[0]);
+    return 1;
+  }
+
+  // Get the IP address and port from the remaining arguments
+  *ip = argv[optind];
+  *port = atoi(argv[optind + 1]);
+
+  if (*port <= 0 || *port > 65535) {
+      fprintf(stderr, "Error: Invalid port number. It must be a positive integer between 1 and 65535.\n");
+      return 1;
+  }
+
+  return 0;
+}
+
 int main(int argc, char **argv)
 {
   struct sockaddr_in6 addr;
@@ -22,14 +70,20 @@ int main(int argc, char **argv)
   uint16_t port = 0;
   pthread_t free_mem_thread;
 
-  if (argc != 3)
+  char *ip_addr;
+  int port_number;
+  
+  if (parse_args(argc, argv, &ip_addr, &port_number, &fault_latency_us) != 0) {
     usage(argv[0]);
+    return 1;
+  }
+
   page_size = sysconf(_SC_PAGE_SIZE);
 
   memset(&addr, 0, sizeof(addr));
   addr.sin6_family = AF_INET6;
-  inet_pton(AF_INET6, argv[1], &addr.sin6_addr);
-  addr.sin6_port = htons(atoi(argv[2]));
+  inet_pton(AF_INET6, ip_addr, &addr.sin6_addr);
+  addr.sin6_port = htons(port_number);
 
   TEST_Z(ec = rdma_create_event_channel());
   TEST_NZ(rdma_create_id(ec, &listener, NULL, RDMA_PS_TCP));
@@ -105,10 +159,4 @@ int on_event(struct rdma_cm_event *event)
     die("on_event: unknown event.");
 
   return r;
-}
-
-void usage(const char *argv0)
-{
-  fprintf(stderr, "usage: %s ip port\n", argv0);
-  exit(1);
 }
