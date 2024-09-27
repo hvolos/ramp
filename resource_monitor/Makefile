@@ -8,7 +8,7 @@ APPS    := resource_monitor
 
 all: ${APPS}
 
-resource_monitor: rdma-common.o daemon.o
+resource_monitor: rdma-common.o daemon.o util.c
 	${LD} -o $@ $^ ${LDLIBS}
 
 clean:

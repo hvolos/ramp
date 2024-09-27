@@ -4,7 +4,7 @@
  * GPLv2 License
  */
 #include "rdma-common.h"
-#include <time.h>
+#include "util.h"
 
 extern long page_size;
 extern int running;
@@ -58,24 +58,6 @@ void die(const char *reason)
 {
   fprintf(stderr, "%s\n", reason);
   exit(EXIT_FAILURE);
-}
-
-// Function to calculate the difference between two timespec structures in microseconds
-long diff_in_us(struct timespec *start, struct timespec *end) {
-    return (end->tv_sec - start->tv_sec) * 1000000 + (end->tv_nsec - start->tv_nsec) / 1000;
-}
-
-// Function to spin until the specified number of microseconds has elapsed
-void spin_microseconds(long microseconds) {
-    struct timespec start, current;
-    
-    // Get the starting time
-    clock_gettime(CLOCK_MONOTONIC, &start);
-    
-    do {
-        // Get the current time
-        clock_gettime(CLOCK_MONOTONIC, &current);
-    } while (diff_in_us(&start, &current) < microseconds);
 }
 
 long get_free_mem(void)
@@ -571,7 +553,7 @@ void on_completion(struct ibv_wc *wc)
         sem_post(&conn->evict_sem);
         break;
       case FAULT:
-        printf("%s, FAULT \n", __func__);
+        printv(PV_INFO, "%s, FAULT \n", __func__);
         atomic_set(&conn->cq_qp_state, CQ_QP_BUSY);
         spin_microseconds(fault_latency_us);
         send_fault_done(conn);
@@ -666,7 +648,7 @@ void send_message(struct connection *conn)
 
   sge.addr = (uintptr_t)conn->send_msg;
   sge.length = sizeof(struct message);
-  printf("message size = %lu\n", sizeof(struct message));
+  printv(PV_INFO, "message size = %lu\n", sizeof(struct message));
   sge.lkey = conn->send_mr->lkey;
 
   while (!conn->connected);
@@ -768,7 +750,7 @@ void send_evict(void *context, int n)
 void send_fault_done(void *context)
 {
   struct connection *conn = (struct connection *)context;
-  printf("%s, FAULT DONE in conn%d\n", __func__, conn->conn_index);
+  printv(PV_INFO, "%s, FAULT DONE in conn%d\n", __func__, conn->conn_index);
   conn->send_msg->type = FAULT_DONE;
   send_message(conn);
 }

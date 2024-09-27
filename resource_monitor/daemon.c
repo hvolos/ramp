@@ -5,6 +5,7 @@
  */
 
 #include "rdma-common.h"
+#include "util.h"
 
 static int on_connect_request(struct rdma_cm_id *id);
 static int on_connection(struct rdma_cm_id *id);
@@ -12,24 +13,33 @@ static int on_disconnect(struct rdma_cm_id *id);
 static int on_event(struct rdma_cm_event *event);
 static void usage(const char *argv0);
 
+extern int current_verbose_level;
+
 long page_size;
 int running;
 int fault_latency_us = 30; // default value
 
 void usage(const char *prog_name) 
 {
-  fprintf(stderr, "usage: %s [-f latency] ip port\n", prog_name);
+  fprintf(stderr, "usage: %s [-v[verbose_level]] [-f latency] ip port\n", prog_name);
   exit(1);
 }
 
-int parse_args(int argc, char *argv[], char **ip, int *port, int *fault_latency_us) {
+int parse_args(int argc, char *argv[], char **ip, int *port, int *verbose_level, int *fault_latency_us) {
   int opt;
   
   *ip = NULL;
   *port = -1;
 
-  while ((opt = getopt(argc, argv, "f:")) != -1) {
+  while ((opt = getopt(argc, argv, "f:v::")) != -1) {
     switch (opt) {
+      case 'v':
+        if (optarg) {
+          *verbose_level = atoi(optarg);
+        } else {
+          *verbose_level = 1;
+        }
+        break;
       case 'f':
         *fault_latency_us = atoi(optarg);
         if (*fault_latency_us <= 0) {
@@ -73,7 +83,7 @@ int main(int argc, char **argv)
   char *ip_addr;
   int port_number;
   
-  if (parse_args(argc, argv, &ip_addr, &port_number, &fault_latency_us) != 0) {
+  if (parse_args(argc, argv, &ip_addr, &port_number, &current_verbose_level, &fault_latency_us) != 0) {
     usage(argv[0]);
     return 1;
   }
