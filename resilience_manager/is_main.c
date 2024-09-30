@@ -292,21 +292,19 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 	}
 
 	// inject faults
-	int inject_fault_index[NDISKS];	
 	for (i=0; i<NDISKS; i++){
-		inject_fault_index[i] = IS_fault_injection_inject_fault(&IS_conn->IS_sess->IS_fault_injection, i);
-		if (inject_fault_index[i]){
+		ctx[i]->fault = IS_fault_injection_inject_fault(&IS_conn->IS_sess->IS_fault_injection, i);
+		if (ctx[i]->fault){
 			// send fault injection request
 			IS_send_fault(cb[i]);
 			// wait for completion of fault injection request
 			rdma_cq_event_handler(cb[i]->cq, cb[i]);
-			inject_fault_index[i] = 0;
 		}
 	}
 	
 	for (i=0, j=0; i<NDATAS; i++){
-		if(cb_index[i] == NO_CB_MAPPED || inject_fault_index[i]){
-			for (; cb_index[NDATAS+j] == NO_CB_MAPPED || inject_fault_index[NDATAS+j]; j++); //looking for good parity
+		if(cb_index[i] == NO_CB_MAPPED || ctx[i]->fault){
+			for (; cb_index[NDATAS+j] == NO_CB_MAPPED || ctx[NDATAS+j]->fault; j++); //looking for good parity
 			
 			if (j < NDISKS-NDATAS){
 				ret = ib_post_send(cb[NDATAS+j]->qp, (struct ib_send_wr *) &ctx[NDATAS+j]->rdma_sq_wr, &bad_wr);
@@ -334,7 +332,7 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 	}
 	
 	for (i=0; i < NDATAS+j; i++) {
-		if(cb_index[i] == NO_CB_MAPPED || inject_fault_index[i])
+		if(cb_index[i] == NO_CB_MAPPED || ctx[i]->fault)
 			continue;
 		// printk("waiting for read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
 		rdma_cq_event_handler(cb[i]->cq, cb[i]);
@@ -1062,7 +1060,7 @@ static int client_send(struct kernel_cb *cb, struct ib_wc *wc)
 
 static int client_read_done(struct kernel_cb * cb, struct ib_wc *wc)
 {
-	int i;
+	int i, j;
 	struct rdma_ctx *ctx;
 	struct request  *req;
 	struct bio	*bio;
@@ -1107,14 +1105,19 @@ static int client_read_done(struct kernel_cb * cb, struct ib_wc *wc)
 		{
 			u32  bio_offset;
 			for (bio_offset=0; bio; bio = bio->bi_next, bio_offset+=IS_PAGE_SIZE){
-				for (i=0; i<NDATAS; i++){
-					memcpy( bio_data(bio)+ i*IS_PAGE_SIZE/NDATAS,
-							ctxs[i]->rdma_buf + bio_offset/NDATAS,
-							IS_PAGE_SIZE/NDATAS );								
-					// printk("client_read_done %lu\n", bio_offset);
-					// print_buffer("client_read_done",
-					//         ctxs[i]->rdma_buf + bio_offset/NDATAS,
-					//         IS_PAGE_SIZE/NDATAS );
+				for (i=0; i<NDATAS; i++){					
+					for (j=i; i<NDISKS; j++){					
+						if (ctxs[j]->fault == 0) {
+							memcpy( bio_data(bio)+ i*IS_PAGE_SIZE/NDATAS,
+									ctxs[j]->rdma_buf + bio_offset/NDATAS,
+									IS_PAGE_SIZE/NDATAS );								
+							// printk("client_read_done %lu\n", bio_offset);
+							// print_buffer("client_read_done",
+							//         ctxs[i]->rdma_buf + bio_offset/NDATAS,
+							//         IS_PAGE_SIZE/NDATAS );
+							break;
+						}
+					}
 				}
 			}
 		}

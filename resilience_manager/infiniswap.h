@@ -337,6 +337,7 @@ struct rdma_ctx {
 	struct rdma_ctx* ctxs[NDISKS];
 	int index;
 	atomic_t* cnt;
+	int fault; // used for fault injection
 };
 
 struct free_ctx_pool {
