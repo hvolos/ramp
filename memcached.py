@@ -18,7 +18,7 @@ class Memcached(en.service.service.Service):
         """Deploy memcached on all hosts.
 
         Args:
-          nodes: the nodes to install memcached on
+          mem: max memory to use for object storage, specified in MBs
         """
         self.mem = mem
         self.memcached_path = "~/memcached"

@@ -73,19 +73,21 @@ def destroy_hydra(roles):
     resource_monitor = Session(Command(cmd), session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
     resource_monitor.destroy()
 
-def deploy_memcached(roles, cgroup = True):
+def deploy_memcached(roles, cgroup = True, mc_mem = 1024, cgroup_mem = 256):
+    mem_limit_in_bytes = cgroup_mem * 1024 * 1024
     if cgroup:
-        memcached = Session(Cgroup(Memcached(mem = 1024), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
+        memcached = Session(Cgroup(Memcached(mc_mem), mem_limit_in_bytes), session = "memcached", nodes = roles['manager'])
     else:
-        memcached = Session(Memcached(mem = 1024), session = "memcached", nodes = roles['manager'])
+        memcached = Session(Memcached(mc_mem), session = "memcached", nodes = roles['manager'])
     memcached.deploy()
     memcached.output()
 
-def destroy_memcached(roles, cgroup = True):
+def destroy_memcached(roles, cgroup = True, mc_mem = 1024, cgroup_mem = 256):
+    mem_limit_in_bytes = cgroup_mem * 1024 * 1024
     if cgroup:
-        memcached = Session(Cgroup(Memcached(mem = 1024), mem_limit_in_bytes = 256*1024*1024), session = "memcached", nodes = roles['manager'])
+        memcached = Session(Cgroup(Memcached(mc_mem), mem_limit_in_bytes), session = "memcached", nodes = roles['manager'])
     else:
-        memcached = Session(Memcached(mem = 1024), session = "memcached", nodes = roles['manager'])
+        memcached = Session(Memcached(mc_mem), session = "memcached", nodes = roles['manager'])
     memcached.destroy()
 
 def run_bench(roles):
