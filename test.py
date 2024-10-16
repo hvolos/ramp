@@ -90,13 +90,13 @@ def destroy_memcached(roles, cgroup = True, mc_mem = 1024, cgroup_mem = 256):
         memcached = Session(Memcached(mc_mem), session = "memcached", nodes = roles['manager'])
     memcached.destroy()
 
-def run_bench(roles):
+def run_bench(roles, records=3000000, qps=1000000, time=30):
     memcached_server = roles["manager"][0].address
     memcache_perf = MemcachePerf(master = roles['control'][0], workers = roles['workload'], threads=10, connections=1, measure_depth=1, measure_connections=1)
     memcache_perf.destroy()
     memcache_perf.deploy()
-    memcache_perf.run_bench(server = memcached_server, load=True, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value")
-    memcache_perf.run_bench(server = memcached_server, load=False, records=3000000, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=1000000, time=30)
+    memcache_perf.run_bench(server = memcached_server, load=True, records=records, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value")
+    memcache_perf.run_bench(server = memcached_server, load=False, records=records, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=qps, time=time)
     memcache_perf.destroy()
 
 def main(argv):
@@ -152,7 +152,7 @@ def main(argv):
         destroy_memcached(roles)
 
     if argv[1] == "run_bench":
-        run_bench(roles)
+        run_bench(roles, 1000, 1000000, 5)
 
 if __name__ == "__main__":
     main(sys.argv)
