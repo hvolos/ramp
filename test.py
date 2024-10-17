@@ -41,14 +41,14 @@ def deploy_hydra(roles):
     resource_monitor.deploy()
     resource_monitor.output()
 
-    # # deploy resilience manager
+    # deploy resilience manager
     cmd = f"{HYDRA_PATH}/setup/resilience_manager_setup.sh"
     resilience_manager = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True, extra_vars = extra_vars)
     resilience_manager.deploy()
     resilience_manager.output()
 
 def destroy_hydra(roles):
-    """Deploy Hydra"""
+    """Destroy Hydra"""
     # get infiniband IP address for each hydra server
     ibip = Command(cmd = "ip -o -4 address show | grep eth | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles['hydra'])
     ibip.deploy()
@@ -72,6 +72,20 @@ def destroy_hydra(roles):
     cmd = f"{HYDRA_PATH}/resource_monitor/resource_monitor {{{{ hostvars[inventory_hostname]['ibip'][inventory_hostname] }}}} 9400"
     resource_monitor = Session(Command(cmd), session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
     resource_monitor.destroy()
+
+def config_fault_injection(roles, fault_rate = 1000):
+    # configure fault injection distribution
+    cmd = f"echo {fault_rate} | tee /sys/kernel/config/hydra/hydrahost0/hydra0/fault_injection_distr"
+    fault_injection_distr = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True)
+    fault_injection_distr.deploy()
+
+    # configure fault injection distribution
+    cmd = f"cat /sys/kernel/config/hydra/hydrahost0/hydra0/fault_injection_distr"
+    fault_injection_distr = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True)
+    fault_injection_distr.deploy()
+    manager_alias = roles['manager'][0].alias
+    stdout = fault_injection_distr.stdout_to_dict('key')['key']
+    assert(int(stdout[manager_alias]) == fault_rate)
 
 def deploy_memcached(roles, cgroup = True, mc_mem = 1024, cgroup_mem = 256):
     mem_limit_in_bytes = cgroup_mem * 1024 * 1024
@@ -144,6 +158,9 @@ def main(argv):
 
     if argv[1] == "destroy_hydra":
         destroy_hydra(roles)
+
+    if argv[1] == "config_fault_injection":
+        config_fault_injection(roles)
 
     if argv[1] == "deploy_memcached":
         deploy_memcached(roles)

@@ -65,18 +65,18 @@ class Command:
             for line in result.payload['stdout_lines']:
                 rprint(f"[red]{host}[/red]\t{line}")
         
-    def stdout_to_dict(self, var):
-        """Returns a dictionary that contains a variable assigned with the standard output of the command
+    def stdout_to_dict(self, key):
+        """Returns a dictionary that contains a key assigned with the standard output of the command
 
         Args:
-            var: the variable that is assigned the standard output of the command
+            key: the key that is assigned the standard output of the command
         """
         d = {}
         task_filter = self.task_name if self.task_name else 'shell'
         for result in self.results.filter(task=task_filter):
             if result.status == 'OK':
                 d[result.host] = result.stdout
-        return {var: d}
+        return {key: d}
 
 
 class _MemoryCgroup:
