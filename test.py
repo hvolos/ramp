@@ -73,19 +73,41 @@ def destroy_hydra(roles):
     resource_monitor = Session(Command(cmd), session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
     resource_monitor.destroy()
 
-def config_fault_injection(roles, fault_rate = 1000):
+def set_fault_injection_enable(roles, val):
+    manager_alias = roles['manager'][0].alias
+
+    # set fault injection
+    cmd = f"echo {val} | tee /sys/kernel/config/hydra/hydrahost0/hydra0/fault_injection_enable"
+    fault_injection_enable = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True)
+    fault_injection_enable.deploy()
+
+    # validate fault injection
+    cmd = f"cat /sys/kernel/config/hydra/hydrahost0/hydra0/fault_injection_enable"
+    fault_injection_enable = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True)
+    fault_injection_enable.deploy()
+    stdout = fault_injection_enable.stdout_to_dict('key')['key']
+    assert(int(stdout[manager_alias]) == val)
+
+def enable_fault_injection(roles, fault_rate = 1000):
+    manager_alias = roles['manager'][0].alias
+
     # configure fault injection distribution
     cmd = f"echo {fault_rate} | tee /sys/kernel/config/hydra/hydrahost0/hydra0/fault_injection_distr"
     fault_injection_distr = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True)
     fault_injection_distr.deploy()
 
-    # configure fault injection distribution
+    # validate fault injection distribution
     cmd = f"cat /sys/kernel/config/hydra/hydrahost0/hydra0/fault_injection_distr"
     fault_injection_distr = Command(cmd, nodes = roles['manager'], remote_working_dir = os.path.join(HYDRA_PATH, "setup"), sudo = True)
     fault_injection_distr.deploy()
-    manager_alias = roles['manager'][0].alias
     stdout = fault_injection_distr.stdout_to_dict('key')['key']
     assert(int(stdout[manager_alias]) == fault_rate)
+
+    set_fault_injection_enable(roles, 1)
+
+def disable_fault_injection(roles):
+    manager_alias = roles['manager'][0].alias
+    set_fault_injection_enable(roles, 0)
 
 def deploy_memcached(roles, cgroup = True, mc_mem = 1024, cgroup_mem = 256):
     mem_limit_in_bytes = cgroup_mem * 1024 * 1024
@@ -159,8 +181,11 @@ def main(argv):
     if argv[1] == "destroy_hydra":
         destroy_hydra(roles)
 
-    if argv[1] == "config_fault_injection":
-        config_fault_injection(roles)
+    if argv[1] == "enable_fault_injection":
+        enable_fault_injection(roles)
+
+    if argv[1] == "disable_fault_injection":
+        disable_fault_injection(roles)
 
     if argv[1] == "deploy_memcached":
         deploy_memcached(roles)
