@@ -20,7 +20,7 @@ en.init_logging(level=logging.INFO)
 
 HYDRA_PATH: str = os.path.abspath(os.path.dirname(os.path.realpath(__file__)))
 
-def deploy_hydra(roles):
+def deploy_hydra(roles, fault_latency_us=30):
     """Deploy Hydra"""
     # get infiniband IP address for each hydra server
     ibip = Command(cmd = "ip -o -4 address show | grep eth | awk '$4 ~ /^10.10/ { print $4 }'", nodes = roles['hydra'])
@@ -36,7 +36,7 @@ def deploy_hydra(roles):
     r = run_ansible([_playbook], roles=roles, extra_vars=extra_vars)
 
     # deploy resource monitor
-    cmd = f"{HYDRA_PATH}/resource_monitor/resource_monitor {{{{ hostvars[inventory_hostname]['ibip'][inventory_hostname] }}}} 9400"
+    cmd = f"{HYDRA_PATH}/resource_monitor/resource_monitor -f {fault_latency_us} {{{{ hostvars[inventory_hostname]['ibip'][inventory_hostname] }}}} 9400"
     resource_monitor = Session(Command(cmd), session = "resource_monitor", nodes = roles['monitor'], extra_vars = extra_vars)
     resource_monitor.deploy()
     resource_monitor.output()
