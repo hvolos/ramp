@@ -180,5 +180,8 @@ class MemcachePerf(en.service.service.Service):
                 task_name=f"Running memcache-perf on master...",
             )
             results = p.results
+        results_stdout = ''
         for r in results:
             print(r.payload['stdout'])
+            results_stdout += (r.payload['stdout'])
+        return results_stdout

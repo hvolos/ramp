@@ -132,7 +132,7 @@ def run_bench(roles, records=3000000, qps=1000000, time=30):
     memcache_perf.destroy()
     memcache_perf.deploy()
     memcache_perf.run_bench(server = memcached_server, load=True, records=records, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value")
-    memcache_perf.run_bench(server = memcached_server, load=False, records=records, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=qps, time=time)
+    results = memcache_perf.run_bench(server = memcached_server, load=False, records=records, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=qps, time=time)
     memcache_perf.destroy()
 
 def main(argv):
