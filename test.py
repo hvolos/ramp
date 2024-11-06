@@ -126,14 +126,38 @@ def destroy_memcached(roles, cgroup = True, mc_mem = 1024, cgroup_mem = 256):
         memcached = Session(Memcached(mc_mem), session = "memcached", nodes = roles['manager'])
     memcached.destroy()
 
-def run_bench(roles, records=3000000, qps=1000000, time=30):
+def run_single(roles, records=3000000, qps=1000000, time=30, fault_rate=0):
+    # prepare memcached
+    disable_fault_injection(roles)
     memcached_server = roles["manager"][0].address
     memcache_perf = MemcachePerf(master = roles['control'][0], workers = roles['workload'], threads=10, connections=1, measure_depth=1, measure_connections=1)
     memcache_perf.destroy()
     memcache_perf.deploy()
     memcache_perf.run_bench(server = memcached_server, load=True, records=records, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value")
+
+    # run experiment
+    if fault_rate > 0:
+        enable_fault_injection(roles, fault_rate) 
+    else:
+        disable_fault_injection(roles)
     results = memcache_perf.run_bench(server = memcached_server, load=False, records=records, iadist = "fb_ia", keysize = "fb_key", valuesize = "fb_value", qps=qps, time=time)
     memcache_perf.destroy()
+    return results
+
+
+def run_multiple(roles, root_results_dir_path, batch_name, iterations=1, records=3000000, time=30):
+    results_dir_path = os.path.join(root_results_dir_path, batch_name)
+    if not os.path.exists(results_dir_path):
+        os.makedirs(results_dir_path)
+
+    for iteration in range(iterations):
+        for qps in [1000, 10000, 100000, 1000000]:
+            for fault_rate in [0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000]:
+                results = run_single(roles, records, qps, time, fault_rate)
+                results_file_name = "qps={}-fault_rate={}-{}".format(qps, fault_rate, iteration)
+                results_path_name = os.path.join(results_dir_path, results_file_name)
+                with open(results_path_name, 'w') as fo:
+                    print(results, file=fo)
 
 def main(argv):
     # path to the inventory
@@ -193,8 +217,15 @@ def main(argv):
     if argv[1] == "destroy_memcached":
         destroy_memcached(roles)
 
-    if argv[1] == "run_bench":
-        run_bench(roles, 1000, 1000000, 5)
+    if argv[1] == "run_single":
+        run_single(roles, 1000, 1000000, 30, 0)
+
+    if argv[1] == "run_single_big":
+        run_single(roles, 1000, 1000000, 30, 0)
+
+    if argv[1] == "run_multiple":
+        batch_name = argv[2]
+        run_multiple(roles, '/users/hvolos01/data', batch_name, 1, 3000000, 60)
 
 if __name__ == "__main__":
     main(sys.argv)
