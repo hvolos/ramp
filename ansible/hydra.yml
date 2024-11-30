@@ -1,0 +1,18 @@
+---
+- name: Gather facts
+  hosts: all
+  tasks:
+    - name: Gather facts on all hosts
+      setup: {}
+
+- name: Hydra Resource Monitor
+  hosts: monitor
+  roles:
+    - common
+    - monitor
+
+- name: Hydra Resilience Manager
+  hosts: manager
+  roles:
+    - common
+    - manager
