@@ -43,19 +43,6 @@
 #include <linux/bio.h>
 #include <linux/types.h>
 
-void print_buffer(char* tag, char* buf, int len) {
-	int i,j;
-	printk("%s buf: %p len: %lu\n", tag, buf, len);
-	for (i=0; i < len;) {
-		for (j=0; j < 32; i++, j++) {
-			printk("%02X", buf[i]);
-		} 
-		printk("\n");
-	}
-}
-
-unsigned char src_in_err[NDISKS], src_err_list[NDISKS];
-int nerrs, nsrcerrs=0;
 #ifdef EC
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 2, 0)
 #include <asm/fpu/api.h>
@@ -66,7 +53,20 @@ int nerrs, nsrcerrs=0;
 #include "erasure_code/erasure_code.h"
 
 unsigned char *encode_matrix, *decode_matrix, *invert_matrix, *encode_tbls, *decode_tbls;
+int nerrs, nsrcerrs=0;
+unsigned char src_in_err[NDISKS], src_err_list[NDISKS];
 unsigned int decode_index[NDATAS];
+
+static void print_buffer(char* tag, char* buf, int len) {
+	int i,j;
+	printk("%s buf: %p len: %lu\n", tag, buf, len);
+	for (i=0; i < len;) {
+		for (j=0; j < 32; i++, j++) {
+			printk("%02X", buf[i]);
+		} 
+		printk("\n");
+	}
+}
 
 #define NO_INVERT_MATRIX -2
 // Generate decode matrix from encode matrix
@@ -293,8 +293,8 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 
 	// inject faults
 	for (i=0; i<NDISKS; i++){
-		ctx[i]->fault = IS_fault_injection_inject_fault(&IS_conn->IS_sess->IS_fault_injection, i);
-		if (ctx[i]->fault){
+		int fault = IS_fault_injection_inject_fault(&IS_conn->IS_sess->IS_fault_injection, i);
+		if (fault){
 			// send fault injection request
 			IS_send_fault(cb[i]);
 			// wait for completion of fault injection request
@@ -308,7 +308,7 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 			
 			if (j < NDISKS-NDATAS){
 				ret = ib_post_send(cb[NDATAS+j]->qp, (struct ib_send_wr *) &ctx[NDATAS+j]->rdma_sq_wr, &bad_wr);
-				IS_fault_injection_access(&IS_conn->IS_sess->IS_fault_injection, NDATAS+j);
+				// IS_fault_injection_access(&IS_conn->IS_sess->IS_fault_injection, NDATAS+j);
 				if (ret){
 					printk(KERN_ALERT PFX "client post read %d, wr=%p\n", ret, &ctx[i]->rdma_sq_wr);
 					return ret;
@@ -336,10 +336,6 @@ int IS_rdma_read(struct IS_connection *IS_conn, struct kernel_cb **cb, int *cb_i
 			continue;
 		// printk("waiting for read cb: %d offset:%lu len: %lu\n", cb_index[i], offset/NDATAS, len/NDATAS );
 		rdma_cq_event_handler(cb[i]->cq, cb[i]);
-		// printk("waiting for read cb: %d offset:%lu len: %lu: DONE\n", cb_index[i], offset/NDATAS, len/NDATAS );
-		// print_buffer("IS_rdma_read",
-		// 				ctx[i]->rdma_buf,
-		// 				ctx[i]->len);
 	}
 
 	return 0;
@@ -677,10 +673,12 @@ static int IS_disconnect_handler(struct kernel_cb *cb)
 	//change cb state
 	IS_sess->cb_state_list[cb->cb_index] = CB_FAIL;
 
+#ifdef EC
 	/*construct decode matrix*/	
-	//decode_matrix = kzalloc(NDISKS * NDATAS * sizeof(unsigned char), GFP_KERNEL);
-	//invert_matrix = kzalloc(NDISKS * NDATAS * sizeof(unsigned char), GFP_KERNEL);
-	//decode_tbls   = kzalloc((NDISKS-NDATAS) * NDATAS * 32 * sizeof(unsigned char), GFP_KERNEL);
+	decode_matrix = kzalloc(NDISKS * NDATAS * sizeof(unsigned char), GFP_KERNEL);
+	invert_matrix = kzalloc(NDISKS * NDATAS * sizeof(unsigned char), GFP_KERNEL);
+	decode_tbls   = kzalloc((NDISKS-NDATAS) * NDATAS * 32 * sizeof(unsigned char), GFP_KERNEL);
+#endif
 
 	memset(src_in_err, 0, NDISKS);
 	//memset(src_err_list, 0, NDISKS);
@@ -698,17 +696,19 @@ static int IS_disconnect_handler(struct kernel_cb *cb)
 		}
 	}
 
-	//ret = gf_gen_decode_matrix(encode_matrix, decode_matrix,
-	//			  invert_matrix, decode_index, src_err_list, src_in_err,
-	//			  nerrs, nsrcerrs, NDATAS, NDISKS);
+#ifdef EC
+	ret = gf_gen_decode_matrix(encode_matrix, decode_matrix,
+				  invert_matrix, decode_index, src_err_list, src_in_err,
+				  nerrs, nsrcerrs, NDATAS, NDISKS);
 	
-	//if (ret != 0) {
-	//	printk("Fail to gf_gen_decode_matrix\n");
-	//	return -1;
-	//}
+	if (ret != 0) {
+		printk("Fail to gf_gen_decode_matrix\n");
+		return -1;
+	}
 
 	/* construct decoding table per disconnection*/
-	//ec_init_tables(NDATAS, nerrs, decode_matrix, decode_tbls);
+	ec_init_tables(NDATAS, nerrs, decode_matrix, decode_tbls);
+#endif
 
 
 	//disallow request to those cb chunks 
@@ -1111,10 +1111,6 @@ static int client_read_done(struct kernel_cb * cb, struct ib_wc *wc)
 							memcpy( bio_data(bio)+ i*IS_PAGE_SIZE/NDATAS,
 									ctxs[j]->rdma_buf + bio_offset/NDATAS,
 									IS_PAGE_SIZE/NDATAS );								
-							// printk("client_read_done %lu\n", bio_offset);
-							// print_buffer("client_read_done",
-							//         ctxs[i]->rdma_buf + bio_offset/NDATAS,
-							//         IS_PAGE_SIZE/NDATAS );
 							break;
 						}
 					}
@@ -1134,7 +1130,7 @@ static int client_read_done(struct kernel_cb * cb, struct ib_wc *wc)
 		}
 
 	}
-#endif
+#endif /* REP */
 
 
 #ifdef EC
@@ -1731,13 +1727,13 @@ static void IS_destroy_conn(struct IS_connection *IS_conn)
 
 static int IS_ec_init(void){
 
-	//encode_matrix = kzalloc( NDISKS * NDATAS * sizeof(unsigned char), GFP_KERNEL);
-	//encode_tbls = kzalloc (  ( NDISKS-NDATAS)*NDATAS*32 * sizeof(unsigned char), GFP_KERNEL);
+	encode_matrix = kzalloc( NDISKS * NDATAS * sizeof(unsigned char), GFP_KERNEL);
+	encode_tbls = kzalloc (  ( NDISKS-NDATAS)*NDATAS*32 * sizeof(unsigned char), GFP_KERNEL);
 	// The matrix generated by gf_gen_cauchy1_matrix
 	// is always invertable.
-//	gf_gen_cauchy1_matrix(encode_matrix, NDISKS, NDATAS);
+	gf_gen_cauchy1_matrix(encode_matrix, NDISKS, NDATAS);
 	// Generate g_tbls from encode matrix encode_matrix
-//	ec_init_tables(NDATAS, NDISKS - NDATAS, &encode_matrix[NDATAS * NDATAS], encode_tbls);
+	ec_init_tables(NDATAS, NDISKS - NDATAS, &encode_matrix[NDATAS * NDATAS], encode_tbls);
 	return 0;
 }
 

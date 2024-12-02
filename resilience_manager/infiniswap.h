@@ -114,6 +114,7 @@
 #define ONE_GB 1073741824 //1024*1024*1024 
 
 /*Replication setup*/
+/*
 #define REP 
 #define NDATAS 1
 #define NDISKS (NDATAS + 2) // + number of redendancy
@@ -121,16 +122,16 @@
 #define DISKSIZE_G ((DATASIZE_G/NDATAS)*NDISKS)
 #define SLAB_SHIFT ONE_GB_SHIFT
 #define SLAB_MASK ONE_GB_MASK
+*/
 
 /*EC setup*/
-/*
 #define EC 
 #define NDATAS 4 //number of splits
 #define NDISKS (NDATAS + 2) //number of splits+parity
 #define DATASIZE_G 4 //size of each block device in GB
 #define DISKSIZE_G ((DATASIZE_G/NDATAS)*NDISKS)
 #define SLAB_SHIFT 32
-#define SLAB_MASK 0xffffffff //((2^SLAB_SHIFT) - 1) //ONE_GB_MASK*/ 
+#define SLAB_MASK 0xffffffff //((2^SLAB_SHIFT) - 1) //ONE_GB_MASK
 
 enum mem_type {
 	DMA = 1,

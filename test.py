@@ -151,8 +151,8 @@ def run_multiple(roles, root_results_dir_path, batch_name, iterations=1, records
         os.makedirs(results_dir_path)
 
     for iteration in range(iterations):
-        for qps in [1000, 10000, 100000, 1000000]:
-            for fault_rate in [0, 10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000]:
+        for qps in [100000]:
+            for fault_rate in [100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000]:
                 results = run_single(roles, records, qps, time, fault_rate)
                 results_file_name = "qps={}-fault_rate={}-{}".format(qps, fault_rate, iteration)
                 results_path_name = os.path.join(results_dir_path, results_file_name)
@@ -181,17 +181,29 @@ def main(argv):
                     address="node3",
                     alias="static-3",
                     user="hvolos01")\
+        .add_machine(roles=["hydra", "monitor"],
+                    address="node4",
+                    alias="static-4",
+                    user="hvolos01")\
+        .add_machine(roles=["hydra", "monitor"],
+                    address="node5",
+                    alias="static-5",
+                    user="hvolos01")\
+        .add_machine(roles=["hydra", "monitor"],
+                    address="node6",
+                    alias="static-6",
+                    user="hvolos01")\
         .add_machine(roles=["workload"],
                     address="workload-node0",
-                    alias="static-4",
+                    alias="static-7",
                     user="hvolos01")\
         .add_machine(roles=["workload"],
                     address="workload-node1",
-                    alias="static-5",
+                    alias="static-8",
                     user="hvolos01")\
         .add_machine(roles=["control"],
                     address="control-node",
-                    alias="static-6",
+                    alias="static-9",
                     user="hvolos01")\
         .finalize()
 
@@ -221,11 +233,11 @@ def main(argv):
         run_single(roles, 1000, 1000000, 30, 0)
 
     if argv[1] == "run_single_big":
-        run_single(roles, 1000, 1000000, 30, 0)
+        run_single(roles, 3000000, 1000000, 30, 0)
 
     if argv[1] == "run_multiple":
         batch_name = argv[2]
-        run_multiple(roles, '/users/hvolos01/data', batch_name, 1, 3000000, 60)
+        run_multiple(roles, '/users/hvolos01/data', batch_name, 5, 3000000, 60)
 
 if __name__ == "__main__":
     main(sys.argv)
