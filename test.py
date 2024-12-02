@@ -152,7 +152,7 @@ def run_multiple(roles, root_results_dir_path, batch_name, iterations=1, records
 
     for iteration in range(iterations):
         for qps in [100000]:
-            for fault_rate in [100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000]:
+            for fault_rate in [0, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000, 1000000000]:
                 results = run_single(roles, records, qps, time, fault_rate)
                 results_file_name = "qps={}-fault_rate={}-{}".format(qps, fault_rate, iteration)
                 results_path_name = os.path.join(results_dir_path, results_file_name)
