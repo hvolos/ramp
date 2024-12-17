@@ -1,3 +1,6 @@
+Replication-Aware Memory-error Protection (RAMP) offers a framework for designing and analyzing two-tier memory resilience schemes, where an upper memory-replication tier is used to handle errors that a lower memory-protection tier cannot tolerate. RAMP provides analytical models that enable system designers and operators to understand the interaction between the two protection tiers and assess how
+the lower tier’s protection strength affects the overall protection provided by multiple replicas in the upper tier. 
+
 ## Verifying Memcached session 
 
 Verify Memcached is running on the manager node
@@ -26,7 +29,6 @@ cat /proc/$(ps aux | grep memcached | grep users | awk '{print $2}')/cgroup
 swapon -s
 
 ## Configuring fault injection
-
 
 Setting fault rate
 
